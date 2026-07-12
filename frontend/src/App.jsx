@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { CheckCircle, ShoppingCart, X, Loader2, CreditCard, ShieldCheck } from 'lucide-react';
+import { CheckCircle, ShoppingCart, X, Loader2, CreditCard, ShieldCheck, Heart } from 'lucide-react';
 import { useAuth } from './context/AuthContext.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import ChatWidget from './components/ChatWidget.jsx';
@@ -121,11 +121,11 @@ function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, 
             </button>
             <button 
               onClick={() => onToggleWishlist(product.id)}
-              style={{ width: '56px', height: '56px', borderRadius: '12px', border: '1.5px solid #e0e0e0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: isWished ? '#e53935' : '#666', transition: 'all 0.2s' }}
-              onMouseEnter={e=>{e.target.style.borderColor='#e53935';e.target.style.color='#e53935';}}
-              onMouseLeave={e=>{if(!isWished) { e.target.style.borderColor='#e0e0e0';e.target.style.color='#666'; }}}
+              style={{ width: '56px', height: '56px', borderRadius: '12px', border: `1.5px solid ${isWished ? '#e53935' : '#e0e0e0'}`, background: isWished ? '#fff5f5' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: isWished ? '#e53935' : '#999', transition: 'all 0.2s', flexShrink: 0 }}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor='#e53935'; e.currentTarget.style.color='#e53935'; e.currentTarget.style.background='#fff5f5';}}
+              onMouseLeave={e=>{if(!isWished){e.currentTarget.style.borderColor='#e0e0e0'; e.currentTarget.style.color='#999'; e.currentTarget.style.background='#fff';}}}
             >
-              <ion-icon name={isWished ? "heart" : "heart-outline"} style={{ fontSize: '24px' }}></ion-icon>
+              <Heart size={22} fill={isWished ? '#e53935' : 'none'} />
             </button>
           </div>
         </div>
@@ -517,7 +517,7 @@ export default function App() {
               )}
             </button>
 
-            <button className="header-action-btn" style={{position:'relative'}} onClick={() => {if(user) navigate('/profile'); else {setAuthOpen(true); showToast('Login to view wishlist');}}}>
+            <button className="header-action-btn" style={{position:'relative'}} onClick={() => {if(user) navigate('/profile?tab=wishlist'); else {setAuthOpen(true); showToast('Login to view wishlist');}}}>
               <ion-icon name="heart-outline" aria-hidden="true"></ion-icon>
               <p className="header-action-label">Wishlist</p>
               {wishlistIds.length > 0 && (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice } from '../utils/formatPrice';
@@ -516,13 +516,24 @@ function WishlistTab({ getToken, currency, showToast, toggleWishlist }) {
                     <span style={{ fontFamily: 'Jost', fontSize: '1rem', fontWeight: 800, color: '#e53935' }}>{formatPrice(product.price, currency)}</span>
                     {discount && <span style={{ fontFamily: 'Jost', fontSize: '0.72rem', fontWeight: 700, color: '#4caf50' }}>-{discount}%</span>}
                   </div>
-                  <button
-                    style={{ width: '100%', background: '#1a1a1a', color: '#fff', border: 'none', padding: '9px', borderRadius: '8px', fontFamily: 'Jost', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'background 0.2s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#333'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#1a1a1a'}
-                  >
-                    <ShoppingCart size={14} /> Add to Cart
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      style={{ flex: 1, background: '#1a1a1a', color: '#fff', border: 'none', padding: '9px', borderRadius: '8px', fontFamily: 'Jost', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'background 0.2s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#1a1a1a'}
+                    >
+                      <ShoppingCart size={14} /> Add to Cart
+                    </button>
+                    <button
+                      onClick={() => handleRemove(product.id)}
+                      title="Remove from wishlist"
+                      style={{ width: '36px', height: '36px', flexShrink: 0, background: '#fff5f5', border: '1.5px solid #e53935', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e53935', transition: 'all 0.2s' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#e53935'; e.currentTarget.style.color = '#fff'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#fff5f5'; e.currentTarget.style.color = '#e53935'; }}
+                    >
+                      <Heart size={14} fill="#e53935" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -549,8 +560,15 @@ const SIDEBAR_ITEMS = [
 export default function ProfilePage({ currency, showToast }) {
   const { user, getToken, logout, updateUser, toggleWishlist } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('account');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'account');
   const [avatarColor, setAvatarColor] = useState(() => localStorage.getItem('casmart_avatar_color') || AVATAR_COLORS[0]);
+
+  // If URL changes (e.g. navigated with ?tab=wishlist), update the active tab
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) setActiveTab(tab);
+  }, [searchParams]);
 
   useEffect(() => { if (!user) navigate('/'); }, [user, navigate]);
   if (!user) return null;
