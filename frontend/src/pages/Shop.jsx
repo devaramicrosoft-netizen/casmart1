@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, X } from 'lucide-react';
+import { Search, X, Eye, Heart, ShoppingBag, Check } from 'lucide-react';
 import { formatPrice } from '../utils/formatPrice';
 
 function ProductCard({ product, onAddToCart, onQuickView, wishlist, onToggleWishlist, currency }) {
@@ -24,14 +24,14 @@ function ProductCard({ product, onAddToCart, onQuickView, wishlist, onToggleWish
           {product.badge_label && <div className={`card-badge ${product.badge_color}`}>{product.badge_label}</div>}
           <div className="card-actions">
             <button className="card-action-btn" aria-label="Quick view" onClick={()=>onQuickView(product)} title="Quick View">
-              <ion-icon name="eye-outline"></ion-icon>
+              <Eye size={18} />
             </button>
             <button
               className="card-action-btn cart-btn"
               onClick={handleAdd}
               style={{background: added ? '#4caf50' : undefined, transition:'background 0.3s'}}
             >
-              <ion-icon name={added ? 'checkmark-outline' : 'bag-handle-outline'} aria-hidden="true"></ion-icon>
+              {added ? <Check size={16} aria-hidden="true" /> : <ShoppingBag size={16} aria-hidden="true" />}
               <p>{added ? 'Added!' : 'Add to Cart'}</p>
             </button>
             <button
@@ -41,7 +41,7 @@ function ProductCard({ product, onAddToCart, onQuickView, wishlist, onToggleWish
               title={isWished ? 'Remove from Wishlist' : 'Add to Wishlist'}
               style={{color: isWished ? '#e53935' : undefined, transition:'color 0.2s'}}
             >
-              <ion-icon name={isWished ? 'heart' : 'heart-outline'}></ion-icon>
+              <Heart size={18} fill={isWished ? '#e53935' : 'none'} />
             </button>
           </div>
         </figure>
