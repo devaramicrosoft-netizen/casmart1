@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
   Package, DollarSign, Tag, CheckCircle, Plus, Search, X,
   Edit2, Trash2, Upload, Settings, AlertTriangle, Image as ImageIcon,
-  ChevronRight, RefreshCw, ShieldOff, LayoutDashboard, MessageSquare, Send
+  ChevronRight, RefreshCw, ShieldOff, LayoutDashboard, MessageSquare, Send, ShoppingCart
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -514,6 +514,7 @@ export default function AdminDashboard({ currency, showToast }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [search, setSearch]             = useState('');
   const [activeTab, setActiveTab]       = useState('products');
+  const [orders, setOrders]             = useState([]);
 
   const fetchProducts = () => {
     setLoading(true);
@@ -523,7 +524,18 @@ export default function AdminDashboard({ currency, showToast }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchProducts(); }, []);
+  useEffect(() => { 
+    fetchProducts();
+    if (activeTab === 'orders') fetchOrders();
+  }, [activeTab]);
+
+  const fetchOrders = () => {
+    setLoading(true);
+    axios.get(`${API}/api/admin/orders`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(res => setOrders(res.data.orders))
+      .catch(() => showToast('Failed to load orders'))
+      .finally(() => setLoading(false));
+  };
 
   if (!user || user.role !== 'admin') {
     return (
@@ -559,6 +571,16 @@ export default function AdminDashboard({ currency, showToast }) {
       setDeleteTarget(null); fetchProducts();
     } catch {
       showToast('Failed to delete product');
+    }
+  };
+
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await axios.put(`${API}/api/admin/orders/${orderId}/status`, { status: newStatus }, { headers: { Authorization: `Bearer ${getToken()}` } });
+      showToast(`Order #${orderId} marked as ${newStatus}`);
+      fetchOrders();
+    } catch (err) {
+      showToast('Failed to update order status');
     }
   };
 
@@ -628,6 +650,14 @@ export default function AdminDashboard({ currency, showToast }) {
             borderBottom: activeTab === 'chats' ? '3px solid #1a1a1a' : '3px solid transparent',
             display: 'flex', alignItems: 'center', gap: '8px'
           }}><MessageSquare size={18}/> Live Chats</button>
+
+          <button onClick={() => setActiveTab('orders')} style={{
+            background: 'none', border: 'none', padding: '16px 0', cursor: 'pointer', fontFamily: 'Jost,sans-serif',
+            fontSize: '0.95rem', fontWeight: activeTab === 'orders' ? 800 : 600,
+            color: activeTab === 'orders' ? '#1a1a1a' : '#888',
+            borderBottom: activeTab === 'orders' ? '3px solid #1a1a1a' : '3px solid transparent',
+            display: 'flex', alignItems: 'center', gap: '8px'
+          }}><ShoppingCart size={18}/> Orders</button>
         </div>
       </div>
 
@@ -784,8 +814,68 @@ export default function AdminDashboard({ currency, showToast }) {
           )}
         </div>
           </>
-        ) : (
+        ) : activeTab === 'chats' ? (
           <LiveChatPanel user={user} getToken={getToken} showToast={showToast} />
+        ) : (
+          <div style={{ background: '#fff', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0', overflow: 'hidden', padding: '24px' }}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '1.2rem', fontWeight: 800, color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShoppingCart size={20} color="#555" /> Customer Orders
+            </h2>
+            {loading ? (
+               <div style={{ padding: '60px', textAlign: 'center' }}>
+                 <RefreshCw size={28} color="#ddd" style={{ animation: 'spin 1s linear infinite' }} />
+               </div>
+            ) : orders.length === 0 ? (
+               <div style={{ padding: '60px', textAlign: 'center', color: '#888' }}>
+                 <p>No orders found.</p>
+               </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontFamily: 'Jost,sans-serif' }}>
+                <thead>
+                  <tr style={{ background: '#fafafa', borderBottom: '2px solid #ebebeb' }}>
+                    <th style={{ padding: '14px 16px', color: '#888', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Order ID</th>
+                    <th style={{ padding: '14px 16px', color: '#888', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Customer</th>
+                    <th style={{ padding: '14px 16px', color: '#888', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date</th>
+                    <th style={{ padding: '14px 16px', color: '#888', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Items</th>
+                    <th style={{ padding: '14px 16px', color: '#888', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Amount</th>
+                    <th style={{ padding: '14px 16px', color: '#888', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map(order => (
+                    <tr key={order.id} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                      <td style={{ padding: '14px 16px', fontSize: '0.9rem', color: '#1a1a1a', fontWeight: 600 }}>#{order.midtrans_order_id || order.id}</td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ fontWeight: 700, color: '#1a1a1a', fontSize: '0.9rem' }}>{order.customer_name}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#888' }}>{order.customer_email}</div>
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: '#666' }}>{new Date(order.created_at).toLocaleDateString()}</td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: '#555', maxWidth: '200px' }}>{order.items_summary || '-'}</td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.9rem', fontWeight: 700, color: '#1a1a1a' }}>{formatPrice(order.gross_amount_idr, 'IDR')}</td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <select 
+                          value={order.status}
+                          onChange={(e) => updateOrderStatus(order.id, e.target.value)}
+                          style={{
+                            padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, border: '1px solid #e0e0e0', cursor: 'pointer', outline: 'none',
+                            background: order.status === 'success' || order.status === 'completed' || order.status === 'shipped' ? '#e8f5e9' : order.status === 'pending' ? '#fff3e0' : '#ffebee',
+                            color: order.status === 'success' || order.status === 'completed' || order.status === 'shipped' ? '#2e7d32' : order.status === 'pending' ? '#ef6c00' : '#c62828'
+                          }}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="settlement">Paid (Settlement)</option>
+                          <option value="shipped">Shipped</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancel">Cancelled</option>
+                          <option value="expire">Expired</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -296,7 +296,40 @@ app.get('/api/orders', verifyToken, async (req, res) => {
   }
 });
 
-// POST /api/notification (Midtrans Webhook) 
+// GET /api/admin/orders (Admin)
+app.get('/api/admin/orders', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const [orders] = await db.query(
+      `SELECT o.id, o.midtrans_order_id, o.gross_amount_idr, o.currency_display,
+              o.status, o.created_at, u.name as customer_name, u.email as customer_email,
+              GROUP_CONCAT(oi.product_name ORDER BY oi.id SEPARATOR ', ') AS items_summary
+       FROM orders o
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       LEFT JOIN users u ON u.id = o.user_id
+       GROUP BY o.id
+       ORDER BY o.created_at DESC`
+    );
+    return res.status(200).json({ orders });
+  } catch (err) {
+    console.error('Admin Orders fetch error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// PUT /api/admin/orders/:id/status (Admin)
+app.put('/api/admin/orders/:id/status', verifyToken, verifyAdmin, async (req, res) => {
+  const { status } = req.body;
+  if (!status) return res.status(400).json({ error: 'Status is required' });
+  try {
+    await db.query('UPDATE orders SET status = ? WHERE id = ?', [status, req.params.id]);
+    return res.json({ message: 'Order status updated successfully' });
+  } catch (err) {
+    console.error('Admin Order update error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/notification (Midtrans Webhook)
 app.post('/api/notification', async (req, res) => {
   try {
     const coreApi = new midtransClient.CoreApi({
