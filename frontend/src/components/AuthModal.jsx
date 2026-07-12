@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-// ─── Reusable Input ───────────────────────────────────────────────────────────
+// Reusable Input 
 function Input({ label, type = 'text', value, onChange, placeholder, autoComplete }) {
   return (
     <div style={{ marginBottom: '16px' }}>
@@ -28,7 +28,7 @@ function Input({ label, type = 'text', value, onChange, placeholder, autoComplet
   );
 }
 
-// ─── Auth Modal ───────────────────────────────────────────────────────────────
+// Auth Modal 
 export default function AuthModal({ isOpen, onClose, onSuccess }) {
   const { login, register } = useAuth();
 

@@ -3,8 +3,9 @@ import axios from 'axios';
 import {
   Package, DollarSign, Tag, CheckCircle, Plus, Search, X,
   Edit2, Trash2, Upload, Settings, AlertTriangle, Image as ImageIcon,
-  ChevronRight, RefreshCw, ShieldOff, LayoutDashboard
+  ChevronRight, RefreshCw, ShieldOff, LayoutDashboard, MessageSquare, Send
 } from 'lucide-react';
+import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice } from '../utils/formatPrice';
 
@@ -16,7 +17,7 @@ const EMPTY_FORM = {
   categories: '', tags: ''
 };
 
-// ─── Stats Card ───────────────────────────────────────────────────────────────
+// Stats Card 
 function StatCard({ Icon, label, value, accent }) {
   return (
     <div style={{
@@ -39,7 +40,7 @@ function StatCard({ Icon, label, value, accent }) {
   );
 }
 
-// ─── Image Uploader ───────────────────────────────────────────────────────────
+// Image Uploader 
 function ImageUploader({ value, onChange, getToken }) {
   const inputRef = useRef();
   const [uploading, setUploading] = useState(false);
@@ -131,7 +132,7 @@ function ImageUploader({ value, onChange, getToken }) {
   );
 }
 
-// ─── Field + Input ─────────────────────────────────────────────────────────────
+// Field + Input 
 function Field({ label, required, children, hint }) {
   return (
     <div>
@@ -164,7 +165,7 @@ function Input({ ...props }) {
   );
 }
 
-// ─── Product Form Modal ────────────────────────────────────────────────────────
+// Product Form Modal 
 function ProductForm({ initial, onSave, onCancel, getToken }) {
   const [data, setData] = useState(initial || EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -281,7 +282,7 @@ function ProductForm({ initial, onSave, onCancel, getToken }) {
   );
 }
 
-// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+// Delete Confirm Modal 
 function ConfirmDialog({ product, onConfirm, onCancel }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)' }}>
@@ -306,7 +307,205 @@ function ConfirmDialog({ product, onConfirm, onCancel }) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// Live Chat Panel (Admin) 
+function LiveChatPanel({ user, getToken, showToast }) {
+  const [chats, setChats] = useState([]);
+  const [activeChat, setActiveChat] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [reply, setReply] = useState('');
+  const [unreadChats, setUnreadChats] = useState({});
+  const activeChatRef = useRef(null);
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    activeChatRef.current = activeChat;
+    if (activeChat) {
+      setUnreadChats(prev => {
+        const next = { ...prev };
+        delete next[activeChat.id];
+        return next;
+      });
+    }
+  }, [activeChat]);
+
+  const fetchChats = React.useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/api/live-chats`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      setChats(res.data.chats);
+    } catch(e) { console.error(e); }
+  }, [getToken]);
+
+  useEffect(() => {
+    fetchChats();
+    const socket = io(API, { transports: ['websocket'] });
+    socketRef.current = socket;
+    socket.emit('admin:join');
+
+    socket.on('admin:new_chat', () => { fetchChats(); });
+    socket.on('admin:chat_activity', ({ chatId }) => { 
+      fetchChats(); 
+      setUnreadChats(prev => {
+        if (activeChatRef.current && activeChatRef.current.id === chatId) return prev;
+        return { ...prev, [chatId]: true };
+      });
+    });
+
+    return () => socket.disconnect();
+  }, [fetchChats]);
+
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      const parent = messagesEndRef.current.parentNode;
+      parent.scrollTo({ top: parent.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    if (!activeChat) return;
+    const socket = socketRef.current;
+    if (socket) socket.emit('admin:join_chat', { chatId: activeChat.id });
+
+    axios.get(`${API}/api/live-chats/${activeChat.id}/messages`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(res => setMessages(res.data.messages))
+      .catch(e => console.error(e));
+
+    const handleMessage = (msg) => {
+      if (msg.chatId === activeChat.id) {
+        setMessages(prev => [...prev, msg]);
+        setTimeout(scrollToBottom, 100);
+      }
+    };
+    socket.on('chat:message', handleMessage);
+    
+    return () => socket.off('chat:message', handleMessage);
+  }, [activeChat, getToken]);
+
+  useEffect(() => { scrollToBottom(); }, [messages]);
+
+  const sendReply = (e) => {
+    e.preventDefault();
+    if (!reply.trim() || !activeChat || activeChat.status === 'closed') return;
+    socketRef.current.emit('admin:message', { chatId: activeChat.id, message: reply.trim(), adminName: user.name });
+    setReply('');
+  };
+
+  const closeChat = async () => {
+    if (!activeChat) return;
+    try {
+      await axios.patch(`${API}/api/live-chats/${activeChat.id}/close`, {}, { headers: { Authorization: `Bearer ${getToken()}` } });
+      showToast('Chat closed successfully');
+      setActiveChat(prev => ({ ...prev, status: 'closed' }));
+      fetchChats();
+    } catch(e) { showToast('Failed to close chat'); }
+  };
+
+  return (
+    <div style={{ display: 'flex', background: '#fff', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0', height: '650px', overflow: 'hidden' }}>
+      
+      {/* Left Sidebar: Chat List */}
+      <div style={{ width: '320px', borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
+          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#1a1a1a' }}>Live Chats</h2>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {chats.map(chat => {
+            const isUnread = unreadChats[chat.id];
+            return (
+            <div key={chat.id} onClick={() => setActiveChat(chat)} style={{
+              padding: '16px 20px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer',
+              background: activeChat?.id === chat.id ? '#fff' : (isUnread ? '#f0fdf4' : 'transparent'),
+              borderLeft: activeChat?.id === chat.id ? '4px solid #1a1a1a' : (isUnread ? '4px solid #25D366' : '4px solid transparent'),
+              transition: 'background 0.2s', display: 'flex', gap: '12px', alignItems: 'flex-start'
+            }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', flexShrink: 0 }}>
+                {chat.user_name.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ fontSize: '0.95rem', color: isUnread ? '#000' : '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: '8px' }}>
+                    {chat.user_name}
+                  </strong>
+                  <span style={{ fontSize: '0.65rem', color: chat.status === 'open' ? '#4caf50' : '#e53935', fontWeight: 700, textTransform: 'uppercase', padding: '2px 6px', background: chat.status === 'open' ? '#e8f5e9' : '#ffebee', borderRadius: '4px', flexShrink: 0 }}>
+                    {chat.status}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: isUnread ? '#1a1a1a' : '#888', fontWeight: isUnread ? 600 : 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: '12px', flex: 1 }}>
+                    {chat.last_message || 'No messages yet'}
+                  </p>
+                  {isUnread && (
+                    <div style={{ width: '20px', height: '20px', background: '#25D366', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0, boxShadow: '0 2px 4px rgba(37,211,102,0.3)' }}>
+                      1
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            );
+          })}
+          {chats.length === 0 && <p style={{ padding: '20px', textAlign: 'center', color: '#888', fontSize: '0.85rem' }}>No active chats.</p>}
+        </div>
+      </div>
+
+      {/* Right Panel: Active Chat */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff' }}>
+        {activeChat ? (
+          <>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1a1a1a' }}>{activeChat.user_name}</h3>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#888' }}>Started {new Date(activeChat.created_at).toLocaleString()}</p>
+              </div>
+              {activeChat.status === 'open' && (
+                <button onClick={closeChat} style={{ padding: '8px 16px', background: '#ffebee', color: '#e53935', border: 'none', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
+                  Resolve Chat
+                </button>
+              )}
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#f9f9f9', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {messages.map((msg, idx) => {
+                const isAdmin = msg.sender_role === 'admin';
+                return (
+                  <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: isAdmin ? 'flex-end' : 'flex-start', gap: '4px' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#bbb' }}>{isAdmin ? `Admin · ${msg.sender_name}` : msg.sender_name}</span>
+                    <div style={{ maxWidth: '70%', padding: '10px 14px', borderRadius: isAdmin ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: isAdmin ? '#1a1a1a' : '#fff', color: isAdmin ? '#fff' : '#333', fontSize: '0.9rem', lineHeight: 1.5, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                      {msg.message}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {activeChat.status === 'open' ? (
+              <div style={{ padding: '16px 24px', borderTop: '1px solid #f0f0f0' }}>
+                <form onSubmit={sendReply} style={{ display: 'flex', gap: '12px' }}>
+                  <input type="text" value={reply} onChange={e => setReply(e.target.value)} placeholder="Type a reply..." style={{ flex: 1, padding: '12px 16px', border: '1px solid #ddd', borderRadius: '24px', outline: 'none', fontSize: '0.9rem', fontFamily: 'Jost,sans-serif' }} />
+                  <button type="submit" disabled={!reply.trim()} style={{ width: '44px', height: '44px', borderRadius: '50%', background: reply.trim() ? '#1a1a1a' : '#ccc', color: '#fff', border: 'none', cursor: reply.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Send size={18} />
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div style={{ padding: '16px', textAlign: 'center', background: '#fafafa', color: '#888', fontSize: '0.85rem' }}>
+                This chat session is closed.
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#bbb' }}>
+            <MessageSquare size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
+            <p style={{ margin: 0, fontSize: '0.9rem' }}>Select a chat from the list to start replying</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Main Component 
 export default function AdminDashboard({ currency, showToast }) {
   const { user, getToken } = useAuth();
   const [products, setProducts]         = useState([]);
@@ -314,6 +513,7 @@ export default function AdminDashboard({ currency, showToast }) {
   const [formData, setFormData]         = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [search, setSearch]             = useState('');
+  const [activeTab, setActiveTab]       = useState('products');
 
   const fetchProducts = () => {
     setLoading(true);
@@ -382,7 +582,7 @@ export default function AdminDashboard({ currency, showToast }) {
       {formData && <ProductForm initial={formData} onSave={handleSave} onCancel={() => setFormData(null)} getToken={getToken} />}
       {deleteTarget && <ConfirmDialog product={deleteTarget} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />}
 
-      {/* ── Page Header ── */}
+      {/* Page Header ── */}
       <div style={{ background: '#fff', borderBottom: '1px solid #ebebeb' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '26px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -391,28 +591,50 @@ export default function AdminDashboard({ currency, showToast }) {
             </div>
             <div>
               <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, color: '#1a1a1a' }}>Admin Dashboard</h1>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: '#aaa' }}>Manage your products, inventory, and store settings.</p>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: '#aaa' }}>Manage your products, inventory, and live customer chats.</p>
             </div>
           </div>
-          <button
-            onClick={() => setFormData(EMPTY_FORM)}
-            style={{
-              background: '#1a1a1a', color: '#fff', border: 'none', borderRadius: '10px',
-              padding: '12px 20px', cursor: 'pointer', fontFamily: 'Jost,sans-serif',
-              fontWeight: 700, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.18)', transition: 'transform 0.1s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-          >
-            <Plus size={16} /> Add New Product
-          </button>
+          {activeTab === 'products' && (
+            <button
+              onClick={() => setFormData(EMPTY_FORM)}
+              style={{
+                background: '#1a1a1a', color: '#fff', border: 'none', borderRadius: '10px',
+                padding: '12px 20px', cursor: 'pointer', fontFamily: 'Jost,sans-serif',
+                fontWeight: 700, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.18)', transition: 'transform 0.1s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              <Plus size={16} /> Add New Product
+            </button>
+          )}
+        </div>
+        
+        {/* Tabs ── */}
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 40px', display: 'flex', gap: '32px' }}>
+          <button onClick={() => setActiveTab('products')} style={{
+            background: 'none', border: 'none', padding: '16px 0', cursor: 'pointer', fontFamily: 'Jost,sans-serif',
+            fontSize: '0.95rem', fontWeight: activeTab === 'products' ? 800 : 600,
+            color: activeTab === 'products' ? '#1a1a1a' : '#888',
+            borderBottom: activeTab === 'products' ? '3px solid #1a1a1a' : '3px solid transparent',
+            display: 'flex', alignItems: 'center', gap: '8px'
+          }}><Package size={18}/> Product Catalog</button>
+          
+          <button onClick={() => setActiveTab('chats')} style={{
+            background: 'none', border: 'none', padding: '16px 0', cursor: 'pointer', fontFamily: 'Jost,sans-serif',
+            fontSize: '0.95rem', fontWeight: activeTab === 'chats' ? 800 : 600,
+            color: activeTab === 'chats' ? '#1a1a1a' : '#888',
+            borderBottom: activeTab === 'chats' ? '3px solid #1a1a1a' : '3px solid transparent',
+            display: 'flex', alignItems: 'center', gap: '8px'
+          }}><MessageSquare size={18}/> Live Chats</button>
         </div>
       </div>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 40px 0' }}>
-
-        {/* ── Stats Row ── */}
+        {activeTab === 'products' ? (
+          <>
+            {/* Stats Row ── */}
         <div style={{ display: 'flex', gap: '16px', marginBottom: '28px', flexWrap: 'wrap' }}>
           <StatCard Icon={Package}      label="Total Products"      value={products.length}                                    accent="#1976d2" />
           <StatCard Icon={DollarSign}   label="Total Catalog Value" value={formatPrice(totalValue, currency)}                  accent="#388e3c" />
@@ -420,7 +642,7 @@ export default function AdminDashboard({ currency, showToast }) {
           <StatCard Icon={CheckCircle}  label="Active Listings"     value={products.length}                                    accent="#7b1fa2" />
         </div>
 
-        {/* ── Product Table ── */}
+        {/* Product Table ── */}
         <div style={{ background: '#fff', borderRadius: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0', overflow: 'hidden' }}>
           {/* Table Toolbar */}
           <div style={{ padding: '18px 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -561,6 +783,10 @@ export default function AdminDashboard({ currency, showToast }) {
             </div>
           )}
         </div>
+          </>
+        ) : (
+          <LiveChatPanel user={user} getToken={getToken} showToast={showToast} />
+        )}
       </div>
     </div>
   );

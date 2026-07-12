@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
   const [user,      setUser]      = useState(null);  // { id, name, email }
   const [isLoading, setIsLoading] = useState(true);  // true while checking stored token
 
-  // ── Auto-login from localStorage on app start ─────────────────────────
+  // Auto-login from localStorage on app start 
   useEffect(() => {
     const token = localStorage.getItem('casmart_token');
     if (!token) { setIsLoading(false); return; }
@@ -25,7 +25,7 @@ export function AuthProvider({ children }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  // ── Login ─────────────────────────────────────────────────────────────
+  // Login 
   const login = useCallback(async (email, password) => {
     const res  = await fetch(`${API}/api/auth/login`, {
       method:  'POST',
@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  // ── Register ──────────────────────────────────────────────────────────
+  // Register 
   const register = useCallback(async (name, email, password) => {
     const res  = await fetch(`${API}/api/auth/register`, {
       method:  'POST',
@@ -53,13 +53,13 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  // ── Logout ────────────────────────────────────────────────────────────
+  // Logout 
   const logout = useCallback(() => {
     localStorage.removeItem('casmart_token');
     setUser(null);
   }, []);
 
-  // ── getToken — for protected API calls ────────────────────────────────
+  // getToken — for protected API calls 
   const getToken = useCallback(() => localStorage.getItem('casmart_token'), []);
 
   return (

@@ -25,12 +25,12 @@ const io     = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ── Static file serving for uploads ────────────────────────────────────────
+// Static file serving for uploads 
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// ── Multer config ───────────────────────────────────────────────────────────
+// Multer config 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
@@ -48,18 +48,16 @@ const upload = multer({
   },
 });
 
-// ── Midtrans Snap Client ────────────────────────────────────────────────────
+// Midtrans Snap Client 
 const snap = new midtransClient.Snap({
   isProduction: false,
   serverKey:    process.env.MIDTRANS_SERVER_KEY || 'YOUR_SERVER_KEY',
   clientKey:    process.env.MIDTRANS_CLIENT_KEY || 'YOUR_CLIENT_KEY',
 });
 
-// ════════════════════════════════════════════════════════════════════════════
 //  AUTH ROUTES
-// ════════════════════════════════════════════════════════════════════════════
 
-// ── POST /api/auth/register ──────────────────────────────────────────────
+// POST /api/auth/register 
 app.post('/api/auth/register', async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -100,7 +98,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/login ─────────────────────────────────────────────────
+// POST /api/auth/login 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -139,7 +137,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// ── GET /api/auth/me ─────────────────────────────────────────────────────
+// GET /api/auth/me 
 app.get('/api/auth/me', verifyToken, async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -153,11 +151,9 @@ app.get('/api/auth/me', verifyToken, async (req, res) => {
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
 //  PAYMENT ROUTES (Protected)
-// ════════════════════════════════════════════════════════════════════════════
 
-// ── POST /api/create-transaction ─────────────────────────────────────────
+// POST /api/create-transaction 
 app.post('/api/create-transaction', verifyToken, async (req, res) => {
   const { order_id, gross_amount, customer_details, item_details, currency_display } = req.body;
 
@@ -217,7 +213,7 @@ app.post('/api/create-transaction', verifyToken, async (req, res) => {
   }
 });
 
-// ── GET /api/orders ───────────────────────────────────────────────────────
+// GET /api/orders 
 app.get('/api/orders', verifyToken, async (req, res) => {
   try {
     const [orders] = await db.query(
@@ -238,7 +234,7 @@ app.get('/api/orders', verifyToken, async (req, res) => {
   }
 });
 
-// ── POST /api/notification (Midtrans Webhook) ─────────────────────────────
+// POST /api/notification (Midtrans Webhook) 
 app.post('/api/notification', async (req, res) => {
   try {
     const coreApi = new midtransClient.CoreApi({
@@ -273,18 +269,16 @@ app.post('/api/notification', async (req, res) => {
   }
 });
 
-// ════════════════════════════════════════════════════════════════════════════
 //  PRODUCTS ROUTES
-// ════════════════════════════════════════════════════════════════════════════
 
-// ── POST /api/upload (Admin) ─────────────────────────────────────────────
+// POST /api/upload (Admin) 
 app.post('/api/upload', verifyToken, verifyAdmin, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   const imageUrl = `/uploads/${req.file.filename}`;
   return res.status(200).json({ url: imageUrl, filename: req.file.filename });
 });
 
-// ── GET /api/products (Public) ───────────────────────────────────────────
+// GET /api/products (Public) 
 app.get('/api/products', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM products ORDER BY id ASC');
@@ -295,7 +289,7 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// ── POST /api/products (Admin) ───────────────────────────────────────────
+// POST /api/products (Admin) 
 app.post('/api/products', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const { name, price, original_price, image, badge_label, badge_color, categories, tags } = req.body;
@@ -310,7 +304,7 @@ app.post('/api/products', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-// ── PUT /api/products/:id (Admin) ────────────────────────────────────────
+// PUT /api/products/:id (Admin) 
 app.put('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const { name, price, original_price, image, badge_label, badge_color, categories, tags } = req.body;
@@ -325,7 +319,7 @@ app.put('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-// ── DELETE /api/products/:id (Admin) ─────────────────────────────────────
+// DELETE /api/products/:id (Admin) 
 app.delete('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
     await db.query('DELETE FROM products WHERE id=?', [req.params.id]);
@@ -336,7 +330,6 @@ app.delete('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 //  CHATBOT ROUTE (Groq AI)
-// ════════════════════════════════════════════════════════════════════════════
 
 app.post('/api/chat', async (req, res) => {
   const { message, history } = req.body;
@@ -431,14 +424,12 @@ Tugasmu: Jawab pertanyaan seputar produk dan toko Casmart dengan ramah. Rekomend
   }
 });
 
-// ── GET / ─────────────────────────────────────────────────────────────────
+// GET / 
 app.get('/', (req, res) => {
   res.json({ message: 'Casmart Payment Gateway API v2.0 — Auth + MySQL + Live Chat enabled' });
 });
 
-// ════════════════════════════════════════════════════════════════════════════
 //  LIVE CHAT — DB SETUP + REST + SOCKET.IO
-// ════════════════════════════════════════════════════════════════════════════
 
 // Auto-create live_chat tables if not exist
 async function initLiveChatTables() {
@@ -448,9 +439,11 @@ async function initLiveChatTables() {
       user_id    INT UNSIGNED NULL,
       user_name  VARCHAR(100) NOT NULL,
       status     ENUM('open','closed') NOT NULL DEFAULT 'open',
+      reopen_count INT NOT NULL DEFAULT 0,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  try { await db.query('ALTER TABLE live_chats ADD COLUMN reopen_count INT NOT NULL DEFAULT 0'); } catch(e){}
   await db.query(`
     CREATE TABLE IF NOT EXISTS live_chat_messages (
       id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -466,7 +459,7 @@ async function initLiveChatTables() {
 }
 initLiveChatTables().catch(console.error);
 
-// ── GET /api/live-chats (Admin — list all chats) ───────────────────────────
+// GET /api/live-chats (Admin — list all chats) 
 app.get('/api/live-chats', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -481,7 +474,7 @@ app.get('/api/live-chats', verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-// ── GET /api/live-chats/:id/messages ──────────────────────────────────────
+// GET /api/live-chats/:id/messages 
 app.get('/api/live-chats/:id/messages', verifyToken, async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -494,7 +487,7 @@ app.get('/api/live-chats/:id/messages', verifyToken, async (req, res) => {
   }
 });
 
-// ── PATCH /api/live-chats/:id/close (Admin) ───────────────────────────────
+// PATCH /api/live-chats/:id/close (Admin) 
 app.patch('/api/live-chats/:id/close', verifyToken, verifyAdmin, async (req, res) => {
   try {
     await db.query('UPDATE live_chats SET status = ? WHERE id = ?', ['closed', req.params.id]);
@@ -505,27 +498,69 @@ app.patch('/api/live-chats/:id/close', verifyToken, verifyAdmin, async (req, res
   }
 });
 
-// ── Socket.io Events ──────────────────────────────────────────────────────
+// Socket.io Events 
 io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
 
-  // Customer starts a new chat session
+  // Customer starts a new chat session (or resumes/reopens existing)
   socket.on('customer:start', async ({ userId, userName }, cb) => {
     try {
-      const [result] = await db.query(
-        'INSERT INTO live_chats (user_id, user_name) VALUES (?, ?)',
-        [userId || null, userName]
+      if (!userId) throw new Error('User ID required');
+
+      const [existing] = await db.query(
+        'SELECT * FROM live_chats WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+        [userId]
       );
-      const chatId = result.insertId;
+
+      let chatId;
+      let isReopened = false;
+      let statusMessage = '';
+
+      if (existing.length > 0) {
+        const chat = existing[0];
+        if (chat.status === 'open') {
+          chatId = chat.id;
+        } else {
+          // It's closed, check reopen count limit
+          if (chat.reopen_count < 3) {
+            await db.query(
+              'UPDATE live_chats SET status = "open", reopen_count = reopen_count + 1 WHERE id = ?',
+              [chat.id]
+            );
+            chatId = chat.id;
+            isReopened = true;
+            statusMessage = `Sesi dibuka ulang. Kesempatan buka ulang tersisa: ${3 - (chat.reopen_count + 1)}`;
+          } else {
+            if (cb) cb({ success: false, error: 'Sesi chat telah mencapai batas maksimal (3x) dibuka ulang.' });
+            return;
+          }
+        }
+      } else {
+        // Create brand new chat
+        const [result] = await db.query(
+          'INSERT INTO live_chats (user_id, user_name) VALUES (?, ?)',
+          [userId, userName]
+        );
+        chatId = result.insertId;
+      }
+
       socket.join(`chat:${chatId}`);
       socket.chatId   = chatId;
       socket.userName = userName;
       socket.role     = 'customer';
 
-      // Notify all admins of new chat
-      io.to('admins').emit('admin:new_chat', { chatId, userName, userId });
+      // Notify all admins of new/reopened chat
+      if (!existing.length || isReopened) {
+        io.to('admins').emit('admin:new_chat', { chatId, userName, userId, isReopened });
+      }
 
-      if (cb) cb({ success: true, chatId });
+      // Fetch existing messages to restore chat history
+      const [messages] = await db.query(
+        'SELECT * FROM live_chat_messages WHERE chat_id = ? ORDER BY created_at ASC',
+        [chatId]
+      );
+
+      if (cb) cb({ success: true, chatId, isReopened, statusMessage, history: messages });
     } catch (err) {
       if (cb) cb({ success: false, error: err.message });
     }

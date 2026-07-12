@@ -9,7 +9,7 @@ import Orders from './pages/Orders.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import { formatPrice, RATES } from './utils/formatPrice.js';
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
+// Toast 
 function Toast({ message, show }) {
   return (
     <div style={{
@@ -26,7 +26,7 @@ function Toast({ message, show }) {
   );
 }
 
-// ─── Currency Switcher ────────────────────────────────────────────────────────
+// Currency Switcher 
 function CurrencySwitcher({ currency, onChange }) {
   const OPTIONS = ['USD','IDR'];
   return (
@@ -51,7 +51,7 @@ function CurrencySwitcher({ currency, onChange }) {
   );
 }
 
-// ─── Quick View Modal ────────────────────────────────────────────────────────
+// Quick View Modal 
 function QuickView({ product, onClose, onAddToCart, currency }) {
   if (!product) return null;
   return (
@@ -100,7 +100,7 @@ function QuickView({ product, onClose, onAddToCart, currency }) {
   );
 }
 
-// ─── Cart Drawer ──────────────────────────────────────────────────────────────
+// Cart Drawer 
 function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, isLoading, currency, onCurrencyChange }) {
   const total      = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const totalItems = cart.reduce((s, i) => s + i.qty, 0);
@@ -225,7 +225,7 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
   );
 }
 
-// ─── Main App ─────────────────────────────────────────────────────────────────
+// Main App 
 export default function App() {
   const { user, logout, getToken }    = useAuth();
   const navigate = useNavigate();
@@ -240,7 +240,7 @@ export default function App() {
   const [quickView,    setQuickView]    = useState(null);
   const [currency,     setCurrency]     = useState('IDR');
   
-  // ── Mobile Nav ──────────────────────────────────────────────────────────
+  // Mobile Nav 
   useEffect(() => {
     const openBtn  = document.querySelector('[data-nav-open-btn]');
     const closeBtn = document.querySelector('[data-nav-close-btn]');
@@ -260,13 +260,13 @@ export default function App() {
     };
   }, []);
 
-  // ── Helpers ─────────────────────────────────────────────────────────────
+  // Helpers 
   const showToast = useCallback((msg) => {
     setToast({ show:true, msg });
     setTimeout(() => setToast(t=>({...t, show:false})), 2800);
   }, []);
 
-  // ── Cart Actions ─────────────────────────────────────────────────────────
+  // Cart Actions 
   const addToCart = useCallback((product) => {
     setCart(prev => {
       const ex = prev.find(i=>i.id===product.id);
@@ -293,7 +293,7 @@ export default function App() {
     });
   }, [showToast]);
 
-  // ── Checkout ─────────────────────────────────────────────────────────────
+  // Checkout 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     if (!user) {
@@ -351,7 +351,6 @@ export default function App() {
 
   const totalItems = cart.reduce((s,i)=>s+i.qty, 0);
 
-  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <>
       <style>{`
@@ -376,7 +375,7 @@ export default function App() {
         }}
       />
 
-      <ChatWidget />
+      <ChatWidget user={user} />
 
       {quickView && (
         <QuickView
@@ -415,7 +414,7 @@ export default function App() {
         onCurrencyChange={setCurrency}
       />
 
-      {/* ── HEADER ─────────────────────────────────────────── */}
+      {/* HEADER ─────────────────────────────────────────── */}
       <header className="header" data-header>
         <div className="container">
           <div className="overlay" data-overlay></div>
@@ -504,7 +503,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── MAIN ROUTES ───────────────────────────────────────────── */}
+      {/* MAIN ROUTES ───────────────────────────────────────────── */}
       <main>
         <Routes>
           <Route path="/" element={
@@ -524,7 +523,7 @@ export default function App() {
         </Routes>
       </main>
 
-      {/* ── FOOTER ─────────────────────────────────────────── */}
+      {/* FOOTER ─────────────────────────────────────────── */}
       <footer className="footer">
         <div className="footer-top">
           <div className="container">
