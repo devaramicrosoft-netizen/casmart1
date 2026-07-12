@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { CheckCircle, ShoppingCart, X, Loader2, CreditCard, ShieldCheck } from 'lucide-react';
 import { useAuth } from './context/AuthContext.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import ChatWidget from './components/ChatWidget.jsx';
@@ -19,7 +20,7 @@ function Toast({ message, show }) {
       boxShadow:'0 8px 32px rgba(0,0,0,0.35)', transition:'transform 0.35s cubic-bezier(.4,0,.2,1)',
       zIndex:99999, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'10px',
     }}>
-      <span style={{color:'#4caf50',fontSize:'1.15rem'}}>✓</span>
+      <CheckCircle color="#4caf50" size={18} />
       {message}
     </div>
   );
@@ -90,10 +91,10 @@ function QuickView({ product, onClose, onAddToCart, currency }) {
             onClick={() => { onAddToCart(product); onClose(); }}
             style={{width:'100%',padding:'14px',background:'#1a1a1a',color:'#fff',border:'none',borderRadius:'8px',fontFamily:'Jost,sans-serif',fontWeight:700,fontSize:'1rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}
           >
-            🛒 Add to Cart
+            <ShoppingCart size={18} /> Add to Cart
           </button>
         </div>
-        <button onClick={onClose} style={{position:'absolute',top:'16px',right:'16px',background:'rgba(0,0,0,0.1)',border:'none',borderRadius:'50%',width:'36px',height:'36px',cursor:'pointer',fontSize:'1.1rem',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+        <button onClick={onClose} style={{position:'absolute',top:'16px',right:'16px',background:'rgba(0,0,0,0.1)',border:'none',borderRadius:'50%',width:'36px',height:'36px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><X size={18} /></button>
       </div>
     </>
   );
@@ -125,7 +126,7 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
               <h2 style={{margin:0,fontSize:'1.15rem',fontWeight:700,color:'#1a1a1a'}}>Shopping Cart</h2>
               <span style={{background:'#1a1a1a',color:'#fff',borderRadius:'50px',padding:'2px 10px',fontSize:'0.75rem',fontWeight:700}}>{totalItems}</span>
             </div>
-            <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:'1.4rem',color:'#888',lineHeight:1}}>✕</button>
+            <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'#888',display:'flex',alignItems:'center',justifyContent:'center'}}><X size={24} /></button>
           </div>
           {/* Currency Switcher */}
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
@@ -138,7 +139,7 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
         <div style={{flex:1,overflowY:'auto',padding:'8px 24px'}}>
           {cart.length === 0 ? (
             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:'16px',color:'#bbb',paddingBottom:'60px'}}>
-              <span style={{fontSize:'4.5rem'}}>🛒</span>
+              <ShoppingCart size={64} color="#ddd" strokeWidth={1.5} />
               <p style={{fontSize:'1rem',margin:0,fontWeight:600,color:'#aaa'}}>Your cart is empty</p>
               <p style={{fontSize:'0.85rem',margin:0,color:'#ccc',textAlign:'center'}}>Add items to get started!</p>
               <button onClick={onClose} style={{background:'#1a1a1a',color:'#fff',border:'none',padding:'11px 28px',borderRadius:'8px',cursor:'pointer',fontFamily:'Jost,sans-serif',fontWeight:700,fontSize:'0.9rem',marginTop:'8px'}}>
@@ -153,8 +154,8 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
                   <button
                     onClick={() => onRemove(item.id)}
                     title="Remove"
-                    style={{position:'absolute',top:'-8px',right:'-8px',background:'#ff5252',color:'#fff',border:'none',borderRadius:'50%',width:'22px',height:'22px',cursor:'pointer',fontSize:'0.65rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}
-                  >✕</button>
+                    style={{position:'absolute',top:'-8px',right:'-8px',background:'#ff5252',color:'#fff',border:'none',borderRadius:'50%',width:'22px',height:'22px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}
+                  ><X size={12} strokeWidth={3} /></button>
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   <p style={{margin:'0 0 4px',fontWeight:600,fontSize:'0.9rem',color:'#1a1a1a',lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{item.name}</p>
@@ -212,10 +213,10 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
               onMouseEnter={e=>{if(!isLoading)e.target.style.background='#333';}}
               onMouseLeave={e=>{if(!isLoading)e.target.style.background='#1a1a1a';}}
             >
-              {isLoading ? <>⏳ Processing...</> : <>💳 Checkout via Midtrans</>}
+              {isLoading ? <><Loader2 size={18} style={{animation:'spin 1s linear infinite'}} /> Processing...</> : <><CreditCard size={18} /> Checkout via Midtrans</>}
             </button>
-            <p style={{textAlign:'center',fontSize:'0.75rem',color:'#ccc',marginTop:'10px',marginBottom:0}}>
-              🔒 Secure payment · Powered by Midtrans
+            <p style={{textAlign:'center',fontSize:'0.75rem',color:'#ccc',marginTop:'10px',marginBottom:0,display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
+              <ShieldCheck size={13} /> Secure payment · Powered by Midtrans
             </p>
           </div>
         )}
@@ -288,7 +289,7 @@ export default function App() {
   const toggleWishlist = useCallback((id) => {
     setWishlist(prev => {
       if (prev.includes(id)) { showToast('Removed from wishlist'); return prev.filter(x=>x!==id); }
-      showToast('Added to wishlist! ❤️'); return [...prev, id];
+      showToast('Added to wishlist!'); return [...prev, id];
     });
   }, [showToast]);
 
@@ -298,7 +299,7 @@ export default function App() {
     if (!user) {
       setCartOpen(false);
       setAuthOpen(true);
-      showToast('Please login first to checkout! 🔐');
+      showToast('Please login first to checkout!');
       return;
     }
     setIsLoading(true);
@@ -332,7 +333,7 @@ export default function App() {
       if (data.token) {
         setCartOpen(false);
         window.snap.pay(data.token, {
-          onSuccess:  (r) => { showToast('Payment successful! 🎉'); setCart([]); console.log(r); },
+          onSuccess:  (r) => { showToast('Payment successful!'); setCart([]); console.log(r); },
           onPending:  (r) => { showToast('Payment pending — please complete it.'); console.log(r); },
           onError:    (r) => { showToast('Payment failed. Please try again.'); console.error(r); },
           onClose:    ()  => { showToast('Payment window closed.'); },
@@ -370,7 +371,7 @@ export default function App() {
         isOpen={authOpen}
         onClose={() => setAuthOpen(false)}
         onSuccess={() => {
-          showToast(`Welcome back! 🎉`);
+          showToast(`Welcome back!`);
           setAuthOpen(false);
         }}
       />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Search, X } from 'lucide-react';
 import { formatPrice } from '../utils/formatPrice';
 
 function ProductCard({ product, onAddToCart, onQuickView, wishlist, onToggleWishlist, currency }) {
@@ -177,8 +178,8 @@ export default function Shop({
               <p style={{fontFamily:'Jost,sans-serif',color:'#666',fontSize:'0.9rem'}}>
                 Showing <strong>{filteredProducts.length}</strong> results for "<strong>{searchQuery}</strong>"
               </p>
-              <button onClick={()=>setSearchQuery('')} style={{background:'#f0f0f0',border:'none',borderRadius:'20px',padding:'4px 14px',cursor:'pointer',fontFamily:'Jost,sans-serif',fontSize:'0.82rem',color:'#666'}}>
-                Clear ✕
+              <button onClick={()=>setSearchQuery('')} style={{background:'#f0f0f0',border:'none',borderRadius:'20px',padding:'4px 14px',cursor:'pointer',fontFamily:'Jost,sans-serif',fontSize:'0.82rem',color:'#666',display:'flex',alignItems:'center',gap:'4px'}}>
+                Clear <X size={12} strokeWidth={3} />
               </button>
             </div>
           )}
@@ -198,9 +199,9 @@ export default function Shop({
           {loading ? (
              <div style={{textAlign:'center', padding:'60px', fontFamily:'Jost'}}>Loading products...</div>
           ) : filteredProducts.length === 0 ? (
-            <div className="product-empty">
-              <span style={{fontSize:'3.5rem'}}>🔍</span>
-              <p>No products found. Try a different search or filter.</p>
+            <div className="product-empty" style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px'}}>
+              <Search size={64} color="#ddd" strokeWidth={1.5} />
+              <p style={{ margin: 0 }}>No products found. Try a different search or filter.</p>
             </div>
           ) : (
             <ul className="product-list">
@@ -251,7 +252,7 @@ export default function Shop({
         <div className="container">
           <div className="newsletter-card" style={{backgroundImage:"url('/assets/images/newsletter-bg.png')"}}>
             <h2 className="card-title">Subscribe Newsletter</h2>
-            <form className="card-form" onSubmit={e=>{e.preventDefault();showToast('Subscribed successfully! 🎉');}}>
+            <form className="card-form" onSubmit={e=>{e.preventDefault();showToast('Subscribed successfully!');}}>
               <div className="input-wrapper">
                 <ion-icon name="mail-outline"></ion-icon>
                 <input type="email" name="email" placeholder="Enter your email" required className="input-field" />

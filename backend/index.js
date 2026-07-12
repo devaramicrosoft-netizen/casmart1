@@ -5,6 +5,9 @@ const bcrypt       = require('bcryptjs');
 const jwt          = require('jsonwebtoken');
 const midtransClient = require('midtrans-client');
 const Groq         = require('groq-sdk');
+const multer       = require('multer');
+const path         = require('path');
+const fs           = require('fs');
 
 dotenv.config();
 
@@ -14,6 +17,29 @@ const { verifyToken, verifyAdmin, JWT_SECRET } = require('./middleware/auth');
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// ── Static file serving for uploads ────────────────────────────────────────
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+app.use('/uploads', express.static(UPLOADS_DIR));
+
+// ── Multer config ───────────────────────────────────────────────────────────
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `product-${Date.now()}${ext}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|webp/;
+    const ok = allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype);
+    cb(ok ? null : new Error('Only image files allowed!'), ok);
+  },
+});
 
 // ── Midtrans Snap Client ────────────────────────────────────────────────────
 const snap = new midtransClient.Snap({
@@ -243,6 +269,13 @@ app.post('/api/notification', async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 //  PRODUCTS ROUTES
 // ════════════════════════════════════════════════════════════════════════════
+
+// ── POST /api/upload (Admin) ─────────────────────────────────────────────
+app.post('/api/upload', verifyToken, verifyAdmin, upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  const imageUrl = `/uploads/${req.file.filename}`;
+  return res.status(200).json({ url: imageUrl, filename: req.file.filename });
+});
 
 // ── GET /api/products (Public) ───────────────────────────────────────────
 app.get('/api/products', async (req, res) => {

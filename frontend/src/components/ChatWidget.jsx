@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Bot, X, Send, MessageSquare } from 'lucide-react';
+
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen]     = useState(false);
@@ -60,7 +62,7 @@ export default function ChatWidget() {
       if (!isOpen) setHasNewMessage(true);
 
     } catch (err) {
-      setHistory([...newHistory, { role: 'model', text: `⚠️ Error: ${err.message}` }]);
+      setHistory([...newHistory, { role: 'model', text: `Error: ${err.message}` }]);
       if (!isOpen) setHasNewMessage(true);
     } finally {
       setIsLoading(false);
@@ -91,15 +93,15 @@ export default function ChatWidget() {
           padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '36px', height: '36px', background: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
-              🤖
+            <div style={{ width: '36px', height: '36px', background: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Bot size={20} color="#333" />
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Casbot</h3>
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#ccc' }}>Customer Service AI</p>
             </div>
           </div>
-          <button onClick={toggleChat} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+          <button onClick={toggleChat} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={20} /></button>
         </div>
 
         {/* Messages Area */}
@@ -164,7 +166,7 @@ export default function ChatWidget() {
                 transition: 'background 0.2s'
               }}
             >
-              ➤
+              <Send size={16} />
             </button>
           </form>
         </div>
@@ -183,7 +185,7 @@ export default function ChatWidget() {
           transform: isOpen ? 'rotate(90deg) scale(0.9)' : 'rotate(0) scale(1)'
         }}
       >
-        {isOpen ? '✕' : '💬'}
+        {isOpen ? <X size={24} /> : <MessageSquare size={24} />}
         {(!isOpen && hasNewMessage) && (
           <div style={{
             position: 'absolute', top: '-4px', right: '-4px',
