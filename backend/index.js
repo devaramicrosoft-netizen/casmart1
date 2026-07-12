@@ -82,15 +82,15 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Generate token
     const token = jwt.sign(
-      { id: result.insertId, name: name.trim(), email: email.toLowerCase().trim(), role: 'user' },
+      { id: result.insertId, name, email: email.toLowerCase().trim(), role: 'user' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     return res.status(201).json({
-      message: 'Account created successfully!',
+      message: 'User registered successfully!',
       token,
-      user: { id: result.insertId, name: name.trim(), email: email.toLowerCase().trim(), role: 'user' },
+      user: { id: result.insertId, name, email: email.toLowerCase().trim(), role: 'user', avatar: null },
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -107,7 +107,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const [rows] = await db.query(
-      'SELECT id, name, email, role, password_hash FROM users WHERE email = ?',
+      'SELECT id, name, email, role, password_hash, avatar FROM users WHERE email = ?',
       [email.toLowerCase().trim()]
     );
 
@@ -129,7 +129,7 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(200).json({
       message: 'Login successful!',
       token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, avatar: user.avatar },
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -141,7 +141,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', verifyToken, async (req, res) => {
   try {
     const [rows] = await db.query(
-      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, role, avatar, created_at FROM users WHERE id = ?',
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'User not found.' });
@@ -157,12 +157,13 @@ app.put('/api/auth/profile', verifyToken, async (req, res) => {
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
   try {
     await db.query('UPDATE users SET name = ? WHERE id = ?', [name.trim(), req.user.id]);
+    const [rows] = await db.query('SELECT avatar FROM users WHERE id = ?', [req.user.id]);
     const token = jwt.sign(
       { id: req.user.id, name: name.trim(), email: req.user.email, role: req.user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
-    return res.json({ message: 'Profile updated.', token, user: { id: req.user.id, name: name.trim(), email: req.user.email, role: req.user.role } });
+    return res.json({ message: 'Profile updated.', token, user: { id: req.user.id, name: name.trim(), email: req.user.email, role: req.user.role, avatar: rows[0]?.avatar } });
   } catch (err) {
     return res.status(500).json({ error: 'Server error.' });
   }
@@ -183,6 +184,32 @@ app.put('/api/auth/password', verifyToken, async (req, res) => {
     return res.json({ message: 'Password changed successfully.' });
   } catch (err) {
     return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/auth/avatar — upload avatar
+app.post('/api/auth/avatar', verifyToken, upload.single('avatar'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded.' });
+  try {
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    await db.query('UPDATE users SET avatar = ? WHERE id = ?', [avatarUrl, req.user.id]);
+    
+    // Also return updated user
+    const token = jwt.sign(
+      { id: req.user.id, name: req.user.name, email: req.user.email, role: req.user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    
+    return res.json({ 
+      message: 'Avatar updated successfully.', 
+      avatarUrl, 
+      token,
+      user: { id: req.user.id, name: req.user.name, email: req.user.email, role: req.user.role, avatar: avatarUrl } 
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error updating avatar.' });
   }
 });
 

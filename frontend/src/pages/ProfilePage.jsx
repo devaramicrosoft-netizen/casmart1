@@ -16,16 +16,18 @@ const AVATAR_COLORS = [
   '#FFEEAD', '#D4A5A5', '#9B59B6', '#34495E',
 ];
 
-function Avatar({ name, color, size = 80 }) {
+function Avatar({ name, color, size = 80, avatarUrl }) {
   const initials = name ? name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase() : '?';
+  const imgUrl = avatarUrl ? (avatarUrl.startsWith('http') ? avatarUrl : `${API}${avatarUrl}`) : null;
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', background: color, color: '#fff',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: size * 0.4, fontWeight: 700, fontFamily: 'Jost, sans-serif', flexShrink: 0,
-      boxShadow: '0 4px 10px rgba(0,0,0,0.1)', userSelect: 'none', border: '3px solid #fff'
+      boxShadow: '0 4px 10px rgba(0,0,0,0.1)', userSelect: 'none', border: '3px solid #fff',
+      overflow: 'hidden'
     }}>
-      {initials}
+      {imgUrl ? <img src={imgUrl} alt="avatar" style={{width: '100%', height: '100%', objectFit: 'cover'}} /> : initials}
     </div>
   );
 }
@@ -122,6 +124,23 @@ function AccountTab({ user, getToken, updateUser, showToast, avatarColor, setAva
     setSavingPw(false);
   };
 
+  const handleUploadAvatar = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('avatar', file);
+    try {
+      showToast('Uploading...');
+      const res = await axios.post(`${API}/api/auth/avatar`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${getToken()}` }
+      });
+      updateUser(res.data.user, res.data.token);
+      showToast('Avatar updated!');
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to upload avatar');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div style={card}>
@@ -142,7 +161,15 @@ function AccountTab({ user, getToken, updateUser, showToast, avatarColor, setAva
           
           {/* Avatar Side */}
           <div style={{ width: '250px', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 20px', borderLeft: '1px solid #eee' }}>
-            <Avatar name={user.name} color={avatarColor} size={100} />
+            <Avatar name={user.name} color={avatarColor} size={100} avatarUrl={user.avatar} />
+            <label style={{
+              marginTop: '16px', background: '#f5f5f5', color: '#555', border: '1px solid #ddd',
+              padding: '6px 16px', borderRadius: '50px', fontSize: '0.8rem', fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'Jost', transition: 'all 0.2s', ':hover': {background: '#eee'}
+            }}>
+              Choose Photo
+              <input type="file" accept="image/jpeg, image/png, image/webp" onChange={handleUploadAvatar} style={{ display: 'none' }} />
+            </label>
             <div style={{ marginTop: '24px', width: '100%' }}>
               <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: '#666', fontFamily: 'Jost', textAlign: 'center', fontWeight: 600 }}>Avatar Color</p>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -282,9 +309,11 @@ function OrdersTab({ user, getToken, currency, showToast }) {
   );
 }
 
-function SecurityTab({ user, logout, showToast }) {
+function SecurityTab({ user, logout, showToast, setActiveTab }) {
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
+  const [show2FA, setShow2FA] = useState(false);
+  const [showLoginAct, setShowLoginAct] = useState(false);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -294,9 +323,9 @@ function SecurityTab({ user, logout, showToast }) {
         
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {[
-            { icon: <Lock size={20} />, title: 'Password', desc: 'Last changed 3 months ago', action: 'Update' },
-            { icon: <Shield size={20} />, title: 'Two-Factor Authentication', desc: 'Not configured', action: 'Enable' },
-            { icon: <MapPin size={20} />, title: 'Login Activity', desc: 'Review active sessions', action: 'View' },
+            { id: 'pw', icon: <Lock size={20} />, title: 'Password', desc: 'Update your password', action: 'Update' },
+            { id: '2fa', icon: <Shield size={20} />, title: 'Two-Factor Authentication', desc: 'Add an extra layer of security', action: 'Enable' },
+            { id: 'activity', icon: <MapPin size={20} />, title: 'Login Activity', desc: 'Review active sessions', action: 'View' },
           ].map((item, i) => (
             <div key={i} style={{ 
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
@@ -311,7 +340,13 @@ function SecurityTab({ user, logout, showToast }) {
                   <p style={{ margin: 0, fontSize: '0.85rem', color: '#888', fontFamily: 'Jost' }}>{item.desc}</p>
                 </div>
               </div>
-              <button style={{ background: 'transparent', border: '1px solid #ddd', padding: '6px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#333', cursor: 'pointer', fontFamily: 'Jost' }}>
+              <button 
+                onClick={() => {
+                  if (item.id === 'pw') setActiveTab('account');
+                  if (item.id === '2fa') setShow2FA(true);
+                  if (item.id === 'activity') setShowLoginAct(true);
+                }}
+                style={{ background: 'transparent', border: '1px solid #ddd', padding: '6px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#333', cursor: 'pointer', fontFamily: 'Jost', transition: 'all 0.2s', ':hover': {background: '#f5f5f5'} }}>
                 {item.action}
               </button>
             </div>
@@ -341,6 +376,55 @@ function SecurityTab({ user, logout, showToast }) {
           </div>
         )}
       </div>
+
+      {/* Modals for Security features */}
+      {show2FA && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: '#fff', padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '400px', position: 'relative' }}>
+            <button onClick={() => setShow2FA(false)} style={{ position: 'absolute', right: '16px', top: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}><X size={20} /></button>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ width: '64px', height: '64px', background: '#E8F5E9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#2E7D32' }}>
+                <Shield size={32} />
+              </div>
+              <h3 style={{ margin: '0 0 8px', fontFamily: 'Jost', fontSize: '1.2rem', color: '#222' }}>Two-Factor Authentication</h3>
+              <p style={{ margin: 0, fontFamily: 'Jost', color: '#666', fontSize: '0.9rem' }}>Scan the QR code below with your Authenticator app (like Google Authenticator or Authy).</p>
+            </div>
+            <div style={{ background: '#f5f5f5', border: '1px dashed #ccc', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', marginBottom: '24px' }}>
+              <span style={{ fontFamily: 'Jost', color: '#999', fontSize: '0.85rem' }}>[QR Code Placeholder]</span>
+            </div>
+            <button onClick={() => { showToast('2FA Enabled successfully! (Simulated)'); setShow2FA(false); }} style={{ width: '100%', background: '#1a1a1a', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Jost' }}>
+              Verify & Enable
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showLoginAct && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: '#fff', padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '500px', position: 'relative' }}>
+            <button onClick={() => setShowLoginAct(false)} style={{ position: 'absolute', right: '16px', top: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}><X size={20} /></button>
+            <h3 style={{ margin: '0 0 24px', fontFamily: 'Jost', fontSize: '1.2rem', color: '#222' }}>Login Activity</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {[
+                { device: 'Windows PC · Chrome', loc: 'Jakarta, Indonesia', time: 'Active now', icon: <MapPin size={18} /> },
+                { device: 'iPhone 13 · Safari', loc: 'Bandung, Indonesia', time: '2 hours ago', icon: <MapPin size={18} /> }
+              ].map((act, i) => (
+                <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'center', padding: '16px', border: '1px solid #eee', borderRadius: '8px' }}>
+                  <div style={{ width: '40px', height: '40px', background: '#f5f5f5', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>{act.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <h4 style={{ margin: '0 0 4px', fontSize: '0.95rem', fontFamily: 'Jost', color: '#222' }}>{act.device}</h4>
+                    <p style={{ margin: 0, fontSize: '0.85rem', fontFamily: 'Jost', color: '#888' }}>{act.loc}</p>
+                  </div>
+                  <span style={{ fontSize: '0.8rem', fontFamily: 'Jost', color: i === 0 ? '#2E7D32' : '#888', fontWeight: i === 0 ? 600 : 400 }}>{act.time}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowLoginAct(false)} style={{ width: '100%', background: '#fff', color: '#333', border: '1px solid #ddd', padding: '12px', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Jost', marginTop: '24px' }}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -392,7 +476,7 @@ export default function ProfilePage({ currency, showToast }) {
           <div style={{ width: '280px', flexShrink: 0 }}>
             {/* User Info Card */}
             <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #eee', marginBottom: '16px' }}>
-              <Avatar name={user.name} color={avatarColor} size={56} />
+              <Avatar name={user.name} color={avatarColor} size={56} avatarUrl={user.avatar} />
               <div style={{ overflow: 'hidden' }}>
                 <h3 style={{ margin: '0 0 4px', fontSize: '1rem', fontWeight: 700, color: '#222', fontFamily: 'Jost', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {user.name}
@@ -431,7 +515,7 @@ export default function ProfilePage({ currency, showToast }) {
           <div style={{ flex: '1 1 500px', minWidth: 0 }}>
             {activeTab === 'account'  && <AccountTab user={user} getToken={getToken} updateUser={updateUser} showToast={showToast} avatarColor={avatarColor} setAvatarColor={setAvatarColor} />}
             {activeTab === 'orders'   && <OrdersTab user={user} getToken={getToken} currency={currency} showToast={showToast} />}
-            {activeTab === 'security' && <SecurityTab user={user} logout={logout} showToast={showToast} />}
+            {activeTab === 'security' && <SecurityTab user={user} logout={logout} showToast={showToast} setActiveTab={setActiveTab} />}
             {(activeTab === 'wishlist' || activeTab === 'vouchers') && (
               <div style={card}>
                 <div style={{ textAlign: 'center', padding: '60px 20px' }}>

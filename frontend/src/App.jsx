@@ -56,45 +56,83 @@ function QuickView({ product, onClose, onAddToCart, currency }) {
   if (!product) return null;
   return (
     <>
-      <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:10000,transition:'opacity 0.3s'}} />
+      <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:10000,backdropFilter:'blur(5px)',transition:'opacity 0.3s'}} />
       <div style={{
         position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
-        background:'#fff', borderRadius:'16px', zIndex:10001, width:'90%', maxWidth:'700px',
-        display:'flex', overflow:'hidden', boxShadow:'0 24px 80px rgba(0,0,0,0.3)',
+        background:'#fff', borderRadius:'24px', zIndex:10001, width:'95%', maxWidth:'950px',
+        display:'flex', overflow:'hidden', boxShadow:'0 30px 90px rgba(0,0,0,0.4)',
         fontFamily:'Jost,sans-serif', maxHeight:'90vh',
       }}>
-        <img src={product.image} alt={product.name} style={{width:'45%',objectFit:'cover',flexShrink:0}} />
-        <div style={{padding:'32px',flex:1,overflowY:'auto'}}>
-          {product.badge_label && (
-            <span style={{background: product.badge_color==='red'?'#e53935':'#4caf50', color:'#fff', padding:'3px 12px', borderRadius:'4px', fontSize:'0.78rem', fontWeight:700}}>
-              {product.badge_label}
+        {/* Left Side: Image */}
+        <div style={{ width: '45%', background: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', position: 'relative' }}>
+           {product.badge_label && (
+            <span style={{position:'absolute', top:'24px', left:'24px', background: product.badge_color==='red'?'#e53935':'#4caf50', color:'#fff', padding:'6px 14px', borderRadius:'8px', fontSize:'0.85rem', fontWeight:700, letterSpacing:'0.5px'}}>
+              {product.badge_label.toUpperCase()}
             </span>
           )}
-          <h2 style={{margin:'12px 0 8px',fontSize:'1.4rem',fontWeight:700,color:'#1a1a1a'}}>{product.name}</h2>
-          <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'20px'}}>
-            <span style={{fontSize:'1.5rem',fontWeight:800,color:'#e53935'}}>{formatPrice(product.price, currency)}</span>
-            {product.original_price && <span style={{fontSize:'1rem',color:'#bbb',textDecoration:'line-through'}}>{formatPrice(product.original_price, currency)}</span>}
-          </div>
-          <p style={{color:'#666',lineHeight:1.7,marginBottom:'24px',fontSize:'0.95rem'}}>
-            Premium quality {product.name.toLowerCase()} crafted with the finest materials. 
-            Designed for everyday wear and timeless style. Available in multiple sizes.
-          </p>
-          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'24px'}}>
-            {['XS','S','M','L','XL'].map(s => (
-              <button key={s} style={{width:'44px',height:'44px',border:'1.5px solid #e0e0e0',borderRadius:'8px',background:'#fff',cursor:'pointer',fontWeight:600,fontSize:'0.85rem',color:'#333',transition:'all 0.2s',fontFamily:'Jost,sans-serif'}}
-                onMouseEnter={e=>{e.target.style.borderColor='#1a1a1a';e.target.style.background='#1a1a1a';e.target.style.color='#fff';}}
-                onMouseLeave={e=>{e.target.style.borderColor='#e0e0e0';e.target.style.background='#fff';e.target.style.color='#333';}}
-              >{s}</button>
-            ))}
-          </div>
-          <button
-            onClick={() => { onAddToCart(product); onClose(); }}
-            style={{width:'100%',padding:'14px',background:'#1a1a1a',color:'#fff',border:'none',borderRadius:'8px',fontFamily:'Jost,sans-serif',fontWeight:700,fontSize:'1rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}
-          >
-            <ShoppingCart size={18} /> Add to Cart
-          </button>
+          <img src={product.image} alt={product.name} style={{width:'100%', height:'auto', maxHeight:'400px', objectFit:'contain', filter:'drop-shadow(0 20px 30px rgba(0,0,0,0.1))'}} />
         </div>
-        <button onClick={onClose} style={{position:'absolute',top:'16px',right:'16px',background:'rgba(0,0,0,0.1)',border:'none',borderRadius:'50%',width:'36px',height:'36px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><X size={18} /></button>
+
+        {/* Right Side: Details */}
+        <div style={{padding:'40px 48px',flex:1,overflowY:'auto', display:'flex', flexDirection:'column'}}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f5b041', marginBottom: '12px' }}>
+             <ion-icon name="star"></ion-icon>
+             <ion-icon name="star"></ion-icon>
+             <ion-icon name="star"></ion-icon>
+             <ion-icon name="star"></ion-icon>
+             <ion-icon name="star-half"></ion-icon>
+             <span style={{ color: '#888', fontSize: '0.85rem', marginLeft: '6px' }}>(4.8 / 5 Reviews)</span>
+          </div>
+
+          <h2 style={{margin:'0 0 12px',fontSize:'1.8rem',fontWeight:800,color:'#1a1a1a', lineHeight:1.2}}>{product.name}</h2>
+          
+          <div style={{display:'flex',alignItems:'baseline',gap:'12px',marginBottom:'24px', paddingBottom:'24px', borderBottom:'1px solid #eee'}}>
+            <span style={{fontSize:'2rem',fontWeight:800,color:'#e53935'}}>{formatPrice(product.price, currency)}</span>
+            {product.original_price && <span style={{fontSize:'1.1rem',color:'#bbb',textDecoration:'line-through', fontWeight:500}}>{formatPrice(product.original_price, currency)}</span>}
+          </div>
+
+          <p style={{color:'#666',lineHeight:1.8,marginBottom:'32px',fontSize:'1rem'}}>
+            Premium quality <strong>{product.name.toLowerCase()}</strong> crafted with the finest materials. 
+            Designed for everyday wear and timeless style. Elevate your look with this exclusive piece.
+          </p>
+
+          <div style={{ marginBottom: '36px' }}>
+            <p style={{ margin: '0 0 12px', fontSize: '0.95rem', fontWeight: 700, color: '#333' }}>Select Size</p>
+            <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+              {['XS','S','M','L','XL'].map((s, i) => (
+                <button key={s} style={{
+                  width:'48px',height:'48px',border:'1.5px solid', borderColor: i === 2 ? '#1a1a1a' : '#e0e0e0', borderRadius:'12px',background: i === 2 ? '#1a1a1a' : '#fff',cursor:'pointer',fontWeight:600,fontSize:'0.9rem',color: i === 2 ? '#fff' : '#333',transition:'all 0.2s',fontFamily:'Jost,sans-serif'
+                }}
+                  onMouseEnter={e=>{if(i !== 2) {e.target.style.borderColor='#1a1a1a';e.target.style.color='#1a1a1a';}}}
+                  onMouseLeave={e=>{if(i !== 2) {e.target.style.borderColor='#e0e0e0';e.target.style.color='#333';}}}
+                >{s}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 'auto', display: 'flex', gap: '16px' }}>
+            <button
+              onClick={() => { onAddToCart(product); onClose(); }}
+              style={{flex:1,padding:'16px',background:'#1a1a1a',color:'#fff',border:'none',borderRadius:'12px',fontFamily:'Jost,sans-serif',fontWeight:700,fontSize:'1.1rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',transition:'all 0.2s', boxShadow:'0 8px 20px rgba(0,0,0,0.15)'}}
+              onMouseEnter={e=>{e.target.style.transform='translateY(-2px)';e.target.style.boxShadow='0 12px 24px rgba(0,0,0,0.2)';}}
+              onMouseLeave={e=>{e.target.style.transform='translateY(0)';e.target.style.boxShadow='0 8px 20px rgba(0,0,0,0.15)';}}
+            >
+              <ShoppingCart size={20} /> Add to Cart
+            </button>
+            <button 
+              style={{ width: '56px', height: '56px', borderRadius: '12px', border: '1.5px solid #e0e0e0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#666', transition: 'all 0.2s' }}
+              onMouseEnter={e=>{e.target.style.borderColor='#e53935';e.target.style.color='#e53935';}}
+              onMouseLeave={e=>{e.target.style.borderColor='#e0e0e0';e.target.style.color='#666';}}
+            >
+              <ion-icon name="heart-outline" style={{ fontSize: '24px' }}></ion-icon>
+            </button>
+          </div>
+        </div>
+        
+        <button onClick={onClose} style={{position:'absolute',top:'24px',right:'24px',background:'#f5f5f5',border:'none',borderRadius:'50%',width:'40px',height:'40px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center', color:'#555', transition:'background 0.2s'}}
+          onMouseEnter={e=>{e.target.style.background='#e0e0e0';}}
+          onMouseLeave={e=>{e.target.style.background='#f5f5f5';}}
+        ><X size={20} strokeWidth={2.5} /></button>
       </div>
     </>
   );
@@ -447,8 +485,12 @@ export default function App() {
                     <span style={{color:'#aaa', cursor:'pointer'}} onClick={()=>{ if(window.confirm(`Logout dari akun ${user.name}?`)) { logout(); navigate('/'); showToast('Logged out. See you!'); }}}>Logout</span>
                   </div>
                 </div>
-                <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#1a1a1a',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'0.85rem',flexShrink:0}}>
-                  {user.name.charAt(0).toUpperCase()}
+                <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#1a1a1a',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'0.85rem',flexShrink:0, overflow: 'hidden'}}>
+                  {user.avatar ? (
+                    <img src={user.avatar.startsWith('http') ? user.avatar : `http://localhost:5000${user.avatar}`} alt="Avatar" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                  ) : (
+                    user.name.charAt(0).toUpperCase()
+                  )}
                 </div>
               </div>
             ) : (
@@ -496,7 +538,7 @@ export default function App() {
             <ul className="navbar-list">
               <li><Link to="/" className="navbar-link">Home</Link></li>
               <li><Link to="/" className="navbar-link">Shop</Link></li>
-              {user && <li><Link to="/orders" className="navbar-link">My Orders</Link></li>}
+              {user && <li><Link to="/profile" className="navbar-link">Profile</Link></li>}
               {user && user.role === 'admin' && <li><Link to="/admin" className="navbar-link" style={{color:'#e53935'}}>Admin Dashboard</Link></li>}
             </ul>
           </nav>
