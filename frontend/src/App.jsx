@@ -52,7 +52,7 @@ function CurrencySwitcher({ currency, onChange }) {
 }
 
 // Quick View Modal 
-function QuickView({ product, onClose, onAddToCart, currency }) {
+function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, isWished }) {
   if (!product) return null;
   return (
     <>
@@ -120,11 +120,12 @@ function QuickView({ product, onClose, onAddToCart, currency }) {
               <ShoppingCart size={20} /> Add to Cart
             </button>
             <button 
-              style={{ width: '56px', height: '56px', borderRadius: '12px', border: '1.5px solid #e0e0e0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#666', transition: 'all 0.2s' }}
+              onClick={() => onToggleWishlist(product.id)}
+              style={{ width: '56px', height: '56px', borderRadius: '12px', border: '1.5px solid #e0e0e0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: isWished ? '#e53935' : '#666', transition: 'all 0.2s' }}
               onMouseEnter={e=>{e.target.style.borderColor='#e53935';e.target.style.color='#e53935';}}
-              onMouseLeave={e=>{e.target.style.borderColor='#e0e0e0';e.target.style.color='#666';}}
+              onMouseLeave={e=>{if(!isWished) { e.target.style.borderColor='#e0e0e0';e.target.style.color='#666'; }}}
             >
-              <ion-icon name="heart-outline" style={{ fontSize: '24px' }}></ion-icon>
+              <ion-icon name={isWished ? "heart" : "heart-outline"} style={{ fontSize: '24px' }}></ion-icon>
             </button>
           </div>
         </div>
@@ -265,10 +266,9 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
 
 // Main App 
 export default function App() {
-  const { user, logout, getToken }    = useAuth();
+  const { user, logout, getToken, wishlistIds, toggleWishlist } = useAuth();
   const navigate = useNavigate();
   const [cart,         setCart]         = useState([]);
-  const [wishlist,     setWishlist]     = useState([]);
   const [cartOpen,     setCartOpen]     = useState(false);
   const [authOpen,     setAuthOpen]     = useState(false);
   const [isLoading,    setIsLoading]    = useState(false);
@@ -324,12 +324,14 @@ export default function App() {
     showToast('Item removed from cart');
   }, [showToast]);
 
-  const toggleWishlist = useCallback((id) => {
-    setWishlist(prev => {
-      if (prev.includes(id)) { showToast('Removed from wishlist'); return prev.filter(x=>x!==id); }
-      showToast('Added to wishlist!'); return [...prev, id];
-    });
-  }, [showToast]);
+  const handleToggleWishlist = useCallback(async (id) => {
+    if (!user) {
+      setAuthOpen(true);
+      showToast('Please login first to use the wishlist!');
+      return;
+    }
+    await toggleWishlist(id);
+  }, [user, toggleWishlist, showToast]);
 
   // Checkout 
   const handleCheckout = async () => {
@@ -416,11 +418,13 @@ export default function App() {
       <ChatWidget user={user} />
 
       {quickView && (
-        <QuickView
-          product={quickView}
-          onClose={()=>setQuickView(null)}
-          onAddToCart={addToCart}
-          currency={currency}
+        <QuickView 
+          product={quickView} 
+          onClose={()=>setQuickView(null)} 
+          onAddToCart={addToCart} 
+          currency={currency} 
+          onToggleWishlist={handleToggleWishlist}
+          isWished={wishlistIds.includes(quickView.id)}
         />
       )}
 
@@ -513,11 +517,11 @@ export default function App() {
               )}
             </button>
 
-            <button className="header-action-btn" style={{position:'relative'}}>
+            <button className="header-action-btn" style={{position:'relative'}} onClick={() => {if(user) navigate('/profile'); else {setAuthOpen(true); showToast('Login to view wishlist');}}}>
               <ion-icon name="heart-outline" aria-hidden="true"></ion-icon>
               <p className="header-action-label">Wishlist</p>
-              {wishlist.length > 0 && (
-                <div className="btn-badge" aria-hidden="true">{wishlist.length}</div>
+              {wishlistIds.length > 0 && (
+                <div className="btn-badge" aria-hidden="true">{wishlistIds.length}</div>
               )}
             </button>
           </div>
@@ -552,8 +556,8 @@ export default function App() {
             <Shop 
               addToCart={addToCart} 
               setQuickView={setQuickView} 
-              wishlist={wishlist} 
-              toggleWishlist={toggleWishlist} 
+              wishlist={wishlistIds} 
+              toggleWishlist={handleToggleWishlist} 
               currency={currency} 
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}

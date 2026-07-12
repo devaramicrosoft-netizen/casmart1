@@ -7,6 +7,17 @@ const API = 'http://localhost:5000';
 export function AuthProvider({ children }) {
   const [user,      setUser]      = useState(null);  // { id, name, email }
   const [isLoading, setIsLoading] = useState(true);  // true while checking stored token
+  const [wishlistIds, setWishlistIds] = useState([]); // array of product ids
+
+  const fetchWishlistIds = async (token) => {
+    try {
+      const res = await fetch(`${API}/api/wishlists`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setWishlistIds(data.wishlists.map(w => w.id)); // w.id is product.id because of JOIN SELECT p.*
+      }
+    } catch (e) { console.error('Failed to load wishlist'); }
+  };
 
   // Auto-login from localStorage on app start 
   useEffect(() => {
@@ -18,7 +29,10 @@ export function AuthProvider({ children }) {
     })
       .then(r => r.json())
       .then(data => {
-        if (data.user) setUser(data.user);
+        if (data.user) {
+          setUser(data.user);
+          fetchWishlistIds(token);
+        }
         else localStorage.removeItem('casmart_token'); // token expired
       })
       .catch(() => localStorage.removeItem('casmart_token'))
@@ -36,6 +50,7 @@ export function AuthProvider({ children }) {
     if (!res.ok) throw new Error(data.error || 'Login failed');
     localStorage.setItem('casmart_token', data.token);
     setUser(data.user);
+    fetchWishlistIds(data.token);
     return data.user;
   }, []);
 
@@ -57,6 +72,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     localStorage.removeItem('casmart_token');
     setUser(null);
+    setWishlistIds([]);
   }, []);
 
   // updateUser — called after profile edit to sync state + token
@@ -68,8 +84,26 @@ export function AuthProvider({ children }) {
   // getToken — for protected API calls 
   const getToken = useCallback(() => localStorage.getItem('casmart_token'), []);
 
+  // toggleWishlist
+  const toggleWishlist = useCallback(async (productId) => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API}/api/wishlists/${productId}/toggle`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWishlistIds(prev => 
+          data.isWishlisted ? [...prev, productId] : prev.filter(id => id !== productId)
+        );
+      }
+    } catch (e) { console.error('Failed to toggle wishlist'); }
+  }, [getToken]);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, getToken, updateUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, getToken, updateUser, wishlistIds, toggleWishlist }}>
       {children}
     </AuthContext.Provider>
   );

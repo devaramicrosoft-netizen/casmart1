@@ -6,7 +6,7 @@ import { formatPrice } from '../utils/formatPrice';
 import {
   User, ShoppingBag, Shield, LogOut, ChevronRight, Edit3,
   Lock, Check, X, Loader2, Package, Calendar, CreditCard,
-  Eye, EyeOff, AlertCircle, CheckCircle2, Ticket, Heart, MapPin
+  Eye, EyeOff, AlertCircle, CheckCircle2, Ticket, Heart, MapPin, Trash2, ShoppingCart, RefreshCw
 } from 'lucide-react';
 
 const API = 'http://localhost:5000';
@@ -429,9 +429,114 @@ function SecurityTab({ user, logout, showToast, setActiveTab }) {
   );
 }
 
+// Wishlist Tab
+function WishlistTab({ getToken, currency, showToast, toggleWishlist }) {
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchWishlist = () => {
+    setLoading(true);
+    axios.get(`${API}/api/wishlists`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(res => setItems(res.data.wishlists))
+      .catch(() => showToast('Failed to load wishlist'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchWishlist(); }, []);
+
+  const handleRemove = async (productId) => {
+    await toggleWishlist(productId);
+    setItems(prev => prev.filter(p => p.id !== productId));
+    showToast('Removed from wishlist');
+  };
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h3 style={sectionTitle}>My Wishlist</h3>
+          <p style={{ margin: '-14px 0 0', fontSize: '0.9rem', color: '#888', fontFamily: 'Jost' }}>
+            {items.length} saved item{items.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <button onClick={fetchWishlist} style={{ background: 'none', border: '1px solid #eee', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: '#888', fontFamily: 'Jost' }}>
+          <RefreshCw size={14} /> Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <RefreshCw size={32} color="#ddd" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <p style={{ fontFamily: 'Jost', color: '#bbb' }}>Loading your wishlist...</p>
+        </div>
+      ) : items.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <Heart size={64} color="#ddd" style={{ margin: '0 auto 16px', display: 'block' }} />
+          <h3 style={{ fontFamily: 'Jost', fontSize: '1.1rem', color: '#555', margin: '0 0 8px' }}>Your wishlist is empty</h3>
+          <p style={{ fontFamily: 'Jost', color: '#aaa', margin: 0 }}>Browse the shop and click the ♡ icon to save items you love.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
+          {items.map(product => {
+            const discount = product.original_price ? Math.round((1 - product.price / product.original_price) * 100) : null;
+            return (
+              <div key={product.id} style={{ borderRadius: '12px', border: '1px solid #f0f0f0', overflow: 'hidden', background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', transition: 'transform 0.2s, box-shadow 0.2s', position: 'relative' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; }}
+              >
+                {/* Remove button */}
+                <button
+                  onClick={() => handleRemove(product.id)}
+                  title="Remove from wishlist"
+                  style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e53935', boxShadow: '0 2px 6px rgba(0,0,0,0.1)', zIndex: 1, transition: 'all 0.2s' }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <Heart size={16} fill="#e53935" />
+                </button>
+
+                {/* Badge */}
+                {product.badge_label && (
+                  <div style={{ position: 'absolute', top: '10px', left: '10px', background: product.badge_color === 'red' ? '#e53935' : '#4caf50', color: '#fff', padding: '3px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 700, zIndex: 1 }}>
+                    {product.badge_label.toUpperCase()}
+                  </div>
+                )}
+
+                {/* Product Image */}
+                <div style={{ background: '#f9f9f9', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <img src={product.image} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.src = 'https://placehold.co/200x200/f5f5f5/ccc?text=?'; }} />
+                </div>
+
+                {/* Product Info */}
+                <div style={{ padding: '14px' }}>
+                  <p style={{ margin: '0 0 8px', fontFamily: 'Jost', fontSize: '0.9rem', fontWeight: 600, color: '#1a1a1a', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    {product.name}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '12px' }}>
+                    <span style={{ fontFamily: 'Jost', fontSize: '1rem', fontWeight: 800, color: '#e53935' }}>{formatPrice(product.price, currency)}</span>
+                    {discount && <span style={{ fontFamily: 'Jost', fontSize: '0.72rem', fontWeight: 700, color: '#4caf50' }}>-{discount}%</span>}
+                  </div>
+                  <button
+                    style={{ width: '100%', background: '#1a1a1a', color: '#fff', border: 'none', padding: '9px', borderRadius: '8px', fontFamily: 'Jost', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'background 0.2s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#1a1a1a'}
+                  >
+                    <ShoppingCart size={14} /> Add to Cart
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const card = { background: '#fff', borderRadius: '12px', padding: '32px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #eee' };
 const sectionTitle = { margin: '0 0 20px', fontSize: '1.15rem', fontWeight: 700, color: '#222', fontFamily: 'Jost, sans-serif' };
 const btnStyle = { background: '#1a1a1a', color: '#fff', border: 'none', padding: '12px 28px', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Jost, sans-serif', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
+
 
 const SIDEBAR_ITEMS = [
   { key: 'account',  label: 'My Profile',    icon: <User size={20} /> },
@@ -442,7 +547,7 @@ const SIDEBAR_ITEMS = [
 ];
 
 export default function ProfilePage({ currency, showToast }) {
-  const { user, getToken, logout, updateUser } = useAuth();
+  const { user, getToken, logout, updateUser, toggleWishlist } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('account');
   const [avatarColor, setAvatarColor] = useState(() => localStorage.getItem('casmart_avatar_color') || AVATAR_COLORS[0]);
@@ -516,10 +621,11 @@ export default function ProfilePage({ currency, showToast }) {
             {activeTab === 'account'  && <AccountTab user={user} getToken={getToken} updateUser={updateUser} showToast={showToast} avatarColor={avatarColor} setAvatarColor={setAvatarColor} />}
             {activeTab === 'orders'   && <OrdersTab user={user} getToken={getToken} currency={currency} showToast={showToast} />}
             {activeTab === 'security' && <SecurityTab user={user} logout={logout} showToast={showToast} setActiveTab={setActiveTab} />}
-            {(activeTab === 'wishlist' || activeTab === 'vouchers') && (
+            {activeTab === 'wishlist' && <WishlistTab getToken={getToken} currency={currency} showToast={showToast} toggleWishlist={toggleWishlist} />}
+            {activeTab === 'vouchers' && (
               <div style={card}>
                 <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-                  {activeTab === 'wishlist' ? <Heart size={64} color="#ddd" style={{ margin: '0 auto 16px' }} /> : <Ticket size={64} color="#ddd" style={{ margin: '0 auto 16px' }} />}
+                  <Ticket size={64} color="#ddd" style={{ margin: '0 auto 16px' }} />
                   <h3 style={{ fontFamily: 'Jost', fontSize: '1.2rem', color: '#333' }}>Feature Coming Soon</h3>
                   <p style={{ fontFamily: 'Jost', color: '#888' }}>We are working hard to bring this feature to you.</p>
                 </div>

@@ -417,14 +417,55 @@ app.put('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
 // DELETE /api/products/:id (Admin) 
 app.delete('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    await db.query('DELETE FROM products WHERE id=?', [req.params.id]);
+    await db.query('DELETE FROM products WHERE id = ?', [req.params.id]);
     return res.status(200).json({ message: 'Product deleted' });
   } catch (err) {
     console.error('Product delete error:', err);
     return res.status(500).json({ error: 'Server error.' });
   }
 });
-//  CHATBOT ROUTE (Groq AI)
+
+//  WISHLIST ROUTES
+
+// GET /api/wishlists (Protected)
+app.get('/api/wishlists', verifyToken, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT p.*, w.created_at as wishlisted_at
+      FROM wishlists w
+      JOIN products p ON w.product_id = p.id
+      WHERE w.user_id = ?
+      ORDER BY w.created_at DESC
+    `, [req.user.id]);
+    return res.status(200).json({ wishlists: rows });
+  } catch (err) {
+    console.error('Wishlist fetch error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/wishlists/:productId/toggle (Protected)
+app.post('/api/wishlists/:productId/toggle', verifyToken, async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const userId = req.user.id;
+    
+    const [existing] = await db.query('SELECT id FROM wishlists WHERE user_id = ? AND product_id = ?', [userId, productId]);
+    
+    if (existing.length > 0) {
+      await db.query('DELETE FROM wishlists WHERE id = ?', [existing[0].id]);
+      return res.status(200).json({ message: 'Removed from wishlist', isWishlisted: false });
+    } else {
+      await db.query('INSERT INTO wishlists (user_id, product_id) VALUES (?, ?)', [userId, productId]);
+      return res.status(200).json({ message: 'Added to wishlist', isWishlisted: true });
+    }
+  } catch (err) {
+    console.error('Wishlist toggle error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+//  AI CHATBOT (Groq)
 
 app.post('/api/chat', async (req, res) => {
   const { message, history } = req.body;
@@ -551,6 +592,17 @@ async function initLiveChatTables() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
   console.log('✅ Live chat tables ready');
+  
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS wishlists (
+      id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id    INT UNSIGNED NOT NULL,
+      product_id INT UNSIGNED NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY user_product (user_id, product_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  console.log('✅ Wishlists table ready');
 }
 initLiveChatTables().catch(console.error);
 
