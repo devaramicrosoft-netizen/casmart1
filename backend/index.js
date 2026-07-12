@@ -9,7 +9,7 @@ const Groq         = require('groq-sdk');
 dotenv.config();
 
 const db                    = require('./db');
-const { verifyToken, JWT_SECRET } = require('./middleware/auth');
+const { verifyToken, verifyAdmin, JWT_SECRET } = require('./middleware/auth');
 
 const app = express();
 app.use(cors());
@@ -51,7 +51,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Generate token
     const token = jwt.sign(
-      { id: result.insertId, name: name.trim(), email: email.toLowerCase().trim() },
+      { id: result.insertId, name: name.trim(), email: email.toLowerCase().trim(), role: 'user' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -59,7 +59,7 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(201).json({
       message: 'Account created successfully!',
       token,
-      user: { id: result.insertId, name: name.trim(), email: email.toLowerCase().trim() },
+      user: { id: result.insertId, name: name.trim(), email: email.toLowerCase().trim(), role: 'user' },
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -76,7 +76,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const [rows] = await db.query(
-      'SELECT id, name, email, password_hash FROM users WHERE email = ?',
+      'SELECT id, name, email, role, password_hash FROM users WHERE email = ?',
       [email.toLowerCase().trim()]
     );
 
@@ -90,7 +90,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Email or password is incorrect.' });
 
     const token = jwt.sign(
-      { id: user.id, name: user.name, email: user.email },
+      { id: user.id, name: user.name, email: user.email, role: user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -98,7 +98,7 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(200).json({
       message: 'Login successful!',
       token,
-      user: { id: user.id, name: user.name, email: user.email },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -110,7 +110,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', verifyToken, async (req, res) => {
   try {
     const [rows] = await db.query(
-      'SELECT id, name, email, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'User not found.' });
@@ -241,6 +241,60 @@ app.post('/api/notification', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+//  PRODUCTS ROUTES
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/products (Public) ───────────────────────────────────────────
+app.get('/api/products', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM products ORDER BY id ASC');
+    return res.status(200).json({ products: rows });
+  } catch (err) {
+    console.error('Products fetch error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── POST /api/products (Admin) ───────────────────────────────────────────
+app.post('/api/products', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const { name, price, original_price, image, badge_label, badge_color, categories, tags } = req.body;
+    const [result] = await db.query(
+      'INSERT INTO products (name, price, original_price, image, badge_label, badge_color, categories, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, price, original_price || null, image, badge_label || null, badge_color || null, JSON.stringify(categories || []), JSON.stringify(tags || [])]
+    );
+    return res.status(201).json({ id: result.insertId, message: 'Product created' });
+  } catch (err) {
+    console.error('Product create error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── PUT /api/products/:id (Admin) ────────────────────────────────────────
+app.put('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const { name, price, original_price, image, badge_label, badge_color, categories, tags } = req.body;
+    await db.query(
+      'UPDATE products SET name=?, price=?, original_price=?, image=?, badge_label=?, badge_color=?, categories=?, tags=? WHERE id=?',
+      [name, price, original_price || null, image, badge_label || null, badge_color || null, JSON.stringify(categories || []), JSON.stringify(tags || []), req.params.id]
+    );
+    return res.status(200).json({ message: 'Product updated' });
+  } catch (err) {
+    console.error('Product update error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── DELETE /api/products/:id (Admin) ─────────────────────────────────────
+app.delete('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    await db.query('DELETE FROM products WHERE id=?', [req.params.id]);
+    return res.status(200).json({ message: 'Product deleted' });
+  } catch (err) {
+    console.error('Product delete error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
 //  CHATBOT ROUTE (Groq AI)
 // ════════════════════════════════════════════════════════════════════════════
 

@@ -1,44 +1,12 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import ChatWidget from './components/ChatWidget.jsx';
-
-// ─── Currency Config ──────────────────────────────────────────────────────────
-// Base price adalah GBP (£). Rate konversi ke USD dan IDR
-const RATES   = { GBP: 1, USD: 1.27, IDR: 20500 };
-const SYMBOLS  = { GBP: '£', USD: '$', IDR: 'Rp' };
-const LOCALES  = { GBP: 'en-GB', USD: 'en-US', IDR: 'id-ID' };
-
-function formatPrice(gbpAmount, currency) {
-  const converted = gbpAmount * RATES[currency];
-  if (currency === 'IDR') {
-    return 'Rp ' + Math.round(converted).toLocaleString('id-ID');
-  }
-  return SYMBOLS[currency] + converted.toFixed(2);
-}
-
-// ─── Product Data ─────────────────────────────────────────────────────────────
-// Kategori: 'all' | 'best-seller' | 'hot-collection' | 'trendy' | 'new-arrival'
-const PRODUCTS = [
-  { id:1,  name:'Varsi Leather Bag',           price:48.75, originalPrice:65.00, image:'/assets/images/product-1.jpg',  badge:{label:'-25%',color:'red'},   category:['best-seller','hot-collection'], tags:['bag','leather'] },
-  { id:2,  name:'Fit Twill Shirt for Woman',   price:62.00, originalPrice:null,  image:'/assets/images/product-2.jpg',  badge:{label:'New',color:'green'},  category:['new-arrival'],                  tags:['shirt','woman'] },
-  { id:3,  name:'Grand Atlantic Chukka Boots', price:32.00, originalPrice:null,  image:'/assets/images/product-3.jpg',  badge:null,                         category:['best-seller'],                  tags:['boots','shoes'] },
-  { id:4,  name:"Women's Faux-Trim Shirt",     price:84.00, originalPrice:null,  image:'/assets/images/product-4.jpg',  badge:null,                         category:['hot-collection','trendy'],      tags:['shirt','woman'] },
-  { id:5,  name:'Soft Touch Interlock Polo',   price:45.00, originalPrice:null,  image:'/assets/images/product-5.jpg',  badge:null,                         category:['trendy'],                       tags:['polo','shirt'] },
-  { id:6,  name:'Casmart Smart Watch',         price:30.00, originalPrice:38.00, image:'/assets/images/product-6.jpg',  badge:null,                         category:['best-seller','trendy'],         tags:['watch','accessories'] },
-  { id:7,  name:'Casmart Smart Glass',         price:25.00, originalPrice:39.00, image:'/assets/images/product-7.jpg',  badge:null,                         category:['hot-collection'],               tags:['glasses','accessories'] },
-  { id:8,  name:'Cotton Shirt for Men',        price:85.00, originalPrice:99.00, image:'/assets/images/product-8.jpg',  badge:null,                         category:['best-seller'],                  tags:['shirt','men'] },
-  { id:9,  name:'Double-breasted Blazer',      price:32.00, originalPrice:null,  image:'/assets/images/product-9.jpg',  badge:null,                         category:['trendy','hot-collection'],      tags:['blazer','men'] },
-  { id:10, name:'Ribbed Cotton Bodysuits',     price:71.00, originalPrice:null,  image:'/assets/images/product-10.jpg', badge:{label:'New',color:'green'},  category:['new-arrival','trendy'],         tags:['bodysuit','woman'] },
-];
-
-const FILTERS = [
-  { key:'all',           label:'All Products' },
-  { key:'best-seller',   label:'Best Seller'    },
-  { key:'hot-collection',label:'Hot Collection' },
-  { key:'trendy',        label:'Trendy'         },
-  { key:'new-arrival',   label:'New Arrival'    },
-];
+import Shop from './pages/Shop.jsx';
+import Orders from './pages/Orders.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
+import { formatPrice, RATES } from './utils/formatPrice.js';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ message, show }) {
@@ -96,15 +64,15 @@ function QuickView({ product, onClose, onAddToCart, currency }) {
       }}>
         <img src={product.image} alt={product.name} style={{width:'45%',objectFit:'cover',flexShrink:0}} />
         <div style={{padding:'32px',flex:1,overflowY:'auto'}}>
-          {product.badge && (
-            <span style={{background: product.badge.color==='red'?'#e53935':'#4caf50', color:'#fff', padding:'3px 12px', borderRadius:'4px', fontSize:'0.78rem', fontWeight:700}}>
-              {product.badge.label}
+          {product.badge_label && (
+            <span style={{background: product.badge_color==='red'?'#e53935':'#4caf50', color:'#fff', padding:'3px 12px', borderRadius:'4px', fontSize:'0.78rem', fontWeight:700}}>
+              {product.badge_label}
             </span>
           )}
           <h2 style={{margin:'12px 0 8px',fontSize:'1.4rem',fontWeight:700,color:'#1a1a1a'}}>{product.name}</h2>
           <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'20px'}}>
             <span style={{fontSize:'1.5rem',fontWeight:800,color:'#e53935'}}>{formatPrice(product.price, currency)}</span>
-            {product.originalPrice && <span style={{fontSize:'1rem',color:'#bbb',textDecoration:'line-through'}}>{formatPrice(product.originalPrice, currency)}</span>}
+            {product.original_price && <span style={{fontSize:'1rem',color:'#bbb',textDecoration:'line-through'}}>{formatPrice(product.original_price, currency)}</span>}
           </div>
           <p style={{color:'#666',lineHeight:1.7,marginBottom:'24px',fontSize:'0.95rem'}}>
             Premium quality {product.name.toLowerCase()} crafted with the finest materials. 
@@ -256,80 +224,21 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
   );
 }
 
-// ─── Product Card ─────────────────────────────────────────────────────────────
-function ProductCard({ product, onAddToCart, onQuickView, wishlist, onToggleWishlist, currency }) {
-  const [added, setAdded] = useState(false);
-  const isWished = wishlist.includes(product.id);
-
-  const handleAdd = (e) => {
-    e.stopPropagation();
-    onAddToCart(product);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1500);
-  };
-
-  return (
-    <li>
-      <div className="product-card">
-        <figure className="card-banner">
-          <a href="#" onClick={e=>{e.preventDefault();onQuickView(product);}}>
-            <img src={product.image} alt={product.name} loading="lazy" width="800" height="1034" className="w-100" />
-          </a>
-          {product.badge && <div className={`card-badge ${product.badge.color}`}>{product.badge.label}</div>}
-          <div className="card-actions">
-            <button className="card-action-btn" aria-label="Quick view" onClick={()=>onQuickView(product)} title="Quick View">
-              <ion-icon name="eye-outline"></ion-icon>
-            </button>
-            <button
-              className="card-action-btn cart-btn"
-              onClick={handleAdd}
-              style={{background: added ? '#4caf50' : undefined, transition:'background 0.3s'}}
-            >
-              <ion-icon name={added ? 'checkmark-outline' : 'bag-handle-outline'} aria-hidden="true"></ion-icon>
-              <p>{added ? 'Added!' : 'Add to Cart'}</p>
-            </button>
-            <button
-              className="card-action-btn"
-              aria-label="Toggle Wishlist"
-              onClick={()=>onToggleWishlist(product.id)}
-              title={isWished ? 'Remove from Wishlist' : 'Add to Wishlist'}
-              style={{color: isWished ? '#e53935' : undefined, transition:'color 0.2s'}}
-            >
-              <ion-icon name={isWished ? 'heart' : 'heart-outline'}></ion-icon>
-            </button>
-          </div>
-        </figure>
-        <div className="card-content">
-          <h3 className="h4 card-title">
-            <a href="#" onClick={e=>{e.preventDefault();onQuickView(product);}}>{product.name}</a>
-          </h3>
-          <div className="card-price">
-            <data value={product.price}>{formatPrice(product.price, currency)}</data>
-            {product.originalPrice && <data value={product.originalPrice}>{formatPrice(product.originalPrice, currency)}</data>}
-          </div>
-        </div>
-      </div>
-    </li>
-  );
-}
-
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const { user, logout, getToken }    = useAuth();
+  const navigate = useNavigate();
   const [cart,         setCart]         = useState([]);
   const [wishlist,     setWishlist]     = useState([]);
   const [cartOpen,     setCartOpen]     = useState(false);
   const [authOpen,     setAuthOpen]     = useState(false);
   const [isLoading,    setIsLoading]    = useState(false);
   const [toast,        setToast]        = useState({ show:false, msg:'' });
-  const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery,  setSearchQuery]  = useState('');
   const [searchActive, setSearchActive] = useState(false);
   const [quickView,    setQuickView]    = useState(null);
   const [currency,     setCurrency]     = useState('IDR');
-  const navRef   = useRef(null);
-  const overlayRef = useRef(null);
-
+  
   // ── Mobile Nav ──────────────────────────────────────────────────────────
   useEffect(() => {
     const openBtn  = document.querySelector('[data-nav-open-btn]');
@@ -351,10 +260,10 @@ export default function App() {
   }, []);
 
   // ── Helpers ─────────────────────────────────────────────────────────────
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
     setToast({ show:true, msg });
     setTimeout(() => setToast(t=>({...t, show:false})), 2800);
-  };
+  }, []);
 
   // ── Cart Actions ─────────────────────────────────────────────────────────
   const addToCart = useCallback((product) => {
@@ -364,7 +273,7 @@ export default function App() {
       return [...prev, {...product, qty:1}];
     });
     showToast(`"${product.name}" added to cart!`);
-  }, []);
+  }, [showToast]);
 
   const updateQty = useCallback((id, qty) => {
     if (qty < 1) { setCart(prev=>prev.filter(i=>i.id!==id)); return; }
@@ -374,32 +283,18 @@ export default function App() {
   const removeItem = useCallback((id) => {
     setCart(prev=>prev.filter(i=>i.id!==id));
     showToast('Item removed from cart');
-  }, []);
+  }, [showToast]);
 
   const toggleWishlist = useCallback((id) => {
     setWishlist(prev => {
       if (prev.includes(id)) { showToast('Removed from wishlist'); return prev.filter(x=>x!==id); }
       showToast('Added to wishlist! ❤️'); return [...prev, id];
     });
-  }, []);
-
-  // ── Filtered Products ────────────────────────────────────────────────────
-  const filteredProducts = PRODUCTS.filter(p => {
-    const matchFilter = activeFilter === 'all' || p.category.includes(activeFilter);
-    const matchSearch = searchQuery === '' ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.tags.some(t=>t.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchFilter && matchSearch;
-  });
-
-  // ── Counts ───────────────────────────────────────────────────────────────
-  const totalItems = cart.reduce((s,i)=>s+i.qty, 0);
-  const totalPrice = cart.reduce((s,i)=>s+i.price*i.qty, 0);
+  }, [showToast]);
 
   // ── Checkout ─────────────────────────────────────────────────────────────
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    // ── Guard: must be logged in ─────────────────────────────────────
     if (!user) {
       setCartOpen(false);
       setAuthOpen(true);
@@ -408,6 +303,7 @@ export default function App() {
     }
     setIsLoading(true);
     try {
+      const totalPrice = cart.reduce((s,i)=>s+i.price*i.qty, 0);
       const orderId     = 'CASMART-' + Date.now();
       const grossAmount = Math.round(totalPrice * RATES.IDR);
       const itemDetails = cart.map(item => ({
@@ -452,6 +348,8 @@ export default function App() {
     }
   };
 
+  const totalItems = cart.reduce((s,i)=>s+i.qty, 0);
+
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <>
@@ -468,7 +366,6 @@ export default function App() {
 
       <Toast message={toast.msg} show={toast.show} />
 
-      {/* Auth Modal */}
       <AuthModal
         isOpen={authOpen}
         onClose={() => setAuthOpen(false)}
@@ -478,10 +375,8 @@ export default function App() {
         }}
       />
 
-      {/* Chat Widget */}
       <ChatWidget />
 
-      {/* Quick View */}
       {quickView && (
         <QuickView
           product={quickView}
@@ -491,7 +386,6 @@ export default function App() {
         />
       )}
 
-      {/* Search Overlay */}
       {searchActive && (
         <div className="header-search-overlay" onClick={()=>setSearchActive(false)}>
           <div className="search-box" onClick={e=>e.stopPropagation()}>
@@ -501,9 +395,9 @@ export default function App() {
               placeholder="Search products..."
               value={searchQuery}
               onChange={e=>setSearchQuery(e.target.value)}
-              onKeyDown={e=>{if(e.key==='Enter'||e.key==='Escape') setSearchActive(false);}}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key==='Escape') { setSearchActive(false); navigate('/'); }}}
             />
-            <button onClick={()=>setSearchActive(false)}>Search</button>
+            <button onClick={()=>{setSearchActive(false); navigate('/');}}>Search</button>
           </div>
         </div>
       )}
@@ -531,25 +425,30 @@ export default function App() {
               value={searchQuery}
               onChange={e=>setSearchQuery(e.target.value)}
             />
-            <button className="search-btn" aria-label="Search">
+            <button className="search-btn" aria-label="Search" onClick={() => navigate('/')}>
               <ion-icon name="search-outline"></ion-icon>
             </button>
           </div>
 
-          <a href="#" className="logo">
+          <Link to="/" className="logo">
             <img src="/assets/images/logo.svg" alt="Casmart logo" width="130" height="31" />
-          </a>
+          </Link>
 
           <div className="header-actions">
             {user ? (
-              /* Logged-in state */
-              <div style={{display:'flex',alignItems:'center',gap:'6px',cursor:'pointer'}} onClick={()=>{ if(window.confirm(`Logout dari akun ${user.name}?`)) { logout(); showToast('Logged out. See you!'); }}}>
+              <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                <div style={{display:'flex',flexDirection:'column',lineHeight:1.2,alignItems:'flex-end'}}>
+                  <span style={{fontSize:'0.78rem',fontWeight:700,color:'#1a1a1a',maxWidth:'80px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name.split(' ')[0]}</span>
+                  <div style={{display:'flex', gap:'8px', fontSize:'0.75rem', marginTop:'3px'}}>
+                    <Link to="/orders" style={{color:'#666', textDecoration:'none', fontWeight:600}}>Orders</Link>
+                    {user.role === 'admin' && (
+                      <Link to="/admin" style={{color:'#e53935', textDecoration:'none', fontWeight:600}}>Admin</Link>
+                    )}
+                    <span style={{color:'#aaa', cursor:'pointer'}} onClick={()=>{ if(window.confirm(`Logout dari akun ${user.name}?`)) { logout(); navigate('/'); showToast('Logged out. See you!'); }}}>Logout</span>
+                  </div>
+                </div>
                 <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#1a1a1a',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'0.85rem',flexShrink:0}}>
                   {user.name.charAt(0).toUpperCase()}
-                </div>
-                <div style={{display:'flex',flexDirection:'column',lineHeight:1.2}}>
-                  <span style={{fontSize:'0.78rem',fontWeight:700,color:'#1a1a1a',maxWidth:'80px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name.split(' ')[0]}</span>
-                  <span style={{fontSize:'0.68rem',color:'#aaa'}}>Logout</span>
                 </div>
               </div>
             ) : (
@@ -587,192 +486,41 @@ export default function App() {
 
           <nav className="navbar" data-navbar>
             <div className="navbar-top">
-              <a href="#" className="logo">
+              <Link to="/" className="logo">
                 <img src="/assets/images/logo.svg" alt="Casmart logo" width="130" height="31" />
-              </a>
+              </Link>
               <button className="nav-close-btn" data-nav-close-btn aria-label="Close Menu">
                 <ion-icon name="close-outline"></ion-icon>
               </button>
             </div>
             <ul className="navbar-list">
-              <li><a href="#home"     className="navbar-link">Home</a></li>
-              <li><a href="#products" className="navbar-link">Shop</a></li>
-              <li><a href="#"         className="navbar-link">About</a></li>
-              <li><a href="#blog"     className="navbar-link">Blog</a></li>
-              <li><a href="#"         className="navbar-link">Contact</a></li>
+              <li><Link to="/" className="navbar-link">Home</Link></li>
+              <li><Link to="/" className="navbar-link">Shop</Link></li>
+              {user && <li><Link to="/orders" className="navbar-link">My Orders</Link></li>}
+              {user && user.role === 'admin' && <li><Link to="/admin" className="navbar-link" style={{color:'#e53935'}}>Admin Dashboard</Link></li>}
             </ul>
           </nav>
         </div>
       </header>
 
-      {/* ── MAIN ───────────────────────────────────────────── */}
+      {/* ── MAIN ROUTES ───────────────────────────────────────────── */}
       <main>
-        <article>
-
-          {/* HERO */}
-          <section className="hero" id="home" style={{backgroundImage:"url('/assets/images/hero-banner.jpg')"}}>
-            <div className="container">
-              <div className="hero-content">
-                <p className="hero-subtitle">Fashion Everyday</p>
-                <h2 className="h1 hero-title">Unrivalled Fashion House</h2>
-                <button className="btn btn-primary" onClick={()=>document.querySelector('#products')?.scrollIntoView({behavior:'smooth'})}>
-                  Shop Now
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* SERVICE */}
-          <section className="service">
-            <div className="container">
-              <ul className="service-list">
-                {[
-                  {icon:'/assets/images/service-icon-1.svg', title:'Free Shipping',    text:'On All Order Over £599'},
-                  {icon:'/assets/images/service-icon-2.svg', title:'Easy Returns',     text:'30 Day Returns Policy'},
-                  {icon:'/assets/images/service-icon-3.svg', title:'Member Discount',  text:'On Order Over 2 Items'},
-                  {icon:'/assets/images/service-icon-4.svg', title:'Secure Payment',   text:'100% Secure Payment'},
-                ].map(s=>(
-                  <li className="service-item" key={s.title}>
-                    <div className="service-item-icon"><img src={s.icon} alt={s.title} /></div>
-                    <div className="service-content">
-                      <p className="service-item-title">{s.title}</p>
-                      <p className="service-item-text">{s.text}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-
-          {/* CATEGORY */}
-          <section className="section category">
-            <div className="container">
-              <h2 className="h2 section-title">Browse The Range</h2>
-              <ul className="category-list">
-                {[
-                  {img:'/assets/images/category-1.jpg', label:'Dress'},
-                  {img:'/assets/images/category-2.jpg', label:'Jacket'},
-                  {img:'/assets/images/category-3.jpg', label:'Pants'},
-                  {img:'/assets/images/category-4.jpg', label:'Tops'},
-                  {img:'/assets/images/category-5.jpg', label:'Shoes'},
-                  {img:'/assets/images/category-6.jpg', label:'Accessories'},
-                ].map(c=>(
-                  <li key={c.label}>
-                    <div className="category-card">
-                      <figure className="card-banner">
-                        <img src={c.img} alt={c.label} loading="lazy" width="200" height="220" className="w-100" />
-                      </figure>
-                      <a href="#products" className="category-name">{c.label}</a>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-
-          {/* PRODUCTS */}
-          <section className="section product" id="products">
-            <div className="container">
-              <h2 className="h2 section-title">Products of the week</h2>
-
-              {/* Search bar inline */}
-              {searchQuery && (
-                <div style={{marginBottom:'16px',display:'flex',alignItems:'center',gap:'12px'}}>
-                  <p style={{fontFamily:'Jost,sans-serif',color:'#666',fontSize:'0.9rem'}}>
-                    Showing <strong>{filteredProducts.length}</strong> results for "<strong>{searchQuery}</strong>"
-                  </p>
-                  <button onClick={()=>setSearchQuery('')} style={{background:'#f0f0f0',border:'none',borderRadius:'20px',padding:'4px 14px',cursor:'pointer',fontFamily:'Jost,sans-serif',fontSize:'0.82rem',color:'#666'}}>
-                    Clear ✕
-                  </button>
-                </div>
-              )}
-
-              {/* Filter Tabs */}
-              <ul className="filter-list">
-                {FILTERS.map(f=>(
-                  <li key={f.key}>
-                    <button
-                      className={`filter-btn${activeFilter===f.key?' active':''}`}
-                      onClick={()=>setActiveFilter(f.key)}
-                    >{f.label}</button>
-                  </li>
-                ))}
-              </ul>
-
-              {filteredProducts.length === 0 ? (
-                <div className="product-empty">
-                  <span style={{fontSize:'3.5rem'}}>🔍</span>
-                  <p>No products found. Try a different search or filter.</p>
-                </div>
-              ) : (
-                <ul className="product-list">
-                  {filteredProducts.map(p=>(
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      onAddToCart={addToCart}
-                      onQuickView={setQuickView}
-                      wishlist={wishlist}
-                      onToggleWishlist={toggleWishlist}
-                      currency={currency}
-                    />
-                  ))}
-                </ul>
-              )}
-              <button className="btn btn-outline">View All Products</button>
-            </div>
-          </section>
-
-          {/* BLOG */}
-          <section className="section blog" id="blog">
-            <div className="container">
-              <h2 className="h2 section-title">Latest fashion news</h2>
-              <ul className="blog-list">
-                {[
-                  {img:'/assets/images/blog-1.jpg', alt:'Worthy Cyber Monday Fashion From Casmart',      title:'Worthy Cyber Monday Fashion From Casmart'},
-                  {img:'/assets/images/blog-2.jpg', alt:"Holiday Home Decoration I've Recently Ordered", title:"Holiday Home Decoration I've Recently Ordered"},
-                  {img:'/assets/images/blog-3.jpg', alt:"Unique Ideas for Fashion You Haven't heard yet",title:"Unique Ideas for Fashion You Haven't heard yet"},
-                ].map(post=>(
-                  <li key={post.title}>
-                    <div className="blog-card">
-                      <figure className="card-banner">
-                        <a href="#"><img src={post.img} alt={post.alt} loading="lazy" width="1020" height="700" className="w-100" /></a>
-                      </figure>
-                      <div className="card-content">
-                        <ul className="card-meta-list">
-                          <li className="card-meta-item"><ion-icon name="folder-open-outline"></ion-icon><a href="#" className="card-meta-link">Fashion</a></li>
-                          <li className="card-meta-item"><ion-icon name="time-outline"></ion-icon><a href="#" className="card-meta-link"><time dateTime="2021-03-31">31 Mar 2021</time></a></li>
-                        </ul>
-                        <h3 className="h3 card-title"><a href="#">{post.title}</a></h3>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-
-          {/* NEWSLETTER */}
-          <section className="section newsletter">
-            <div className="container">
-              <div className="newsletter-card" style={{backgroundImage:"url('/assets/images/newsletter-bg.png')"}}>
-                <h2 className="card-title">Subscribe Newsletter</h2>
-                <p className="card-text">Enter your email below to be the first to know about new collections and product launches.</p>
-                <form className="card-form" onSubmit={e=>{e.preventDefault();showToast('Subscribed successfully! 🎉');}}>
-                  <div className="input-wrapper">
-                    <ion-icon name="mail-outline"></ion-icon>
-                    <input type="email" name="email" placeholder="Enter your email" required className="input-field" />
-                  </div>
-                  <button type="submit" className="btn btn-primary w-100">
-                    <span>Subscribe</span>
-                    <ion-icon name="arrow-forward" aria-hidden="true"></ion-icon>
-                  </button>
-                </form>
-              </div>
-            </div>
-          </section>
-
-        </article>
+        <Routes>
+          <Route path="/" element={
+            <Shop 
+              addToCart={addToCart} 
+              setQuickView={setQuickView} 
+              wishlist={wishlist} 
+              toggleWishlist={toggleWishlist} 
+              currency={currency} 
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              showToast={showToast}
+            />
+          } />
+          <Route path="/orders" element={<Orders currency={currency} showToast={showToast} />} />
+          <Route path="/admin" element={<AdminDashboard currency={currency} showToast={showToast} />} />
+        </Routes>
       </main>
 
       {/* ── FOOTER ─────────────────────────────────────────── */}
@@ -780,7 +528,7 @@ export default function App() {
         <div className="footer-top">
           <div className="container">
             <div className="footer-brand">
-              <a href="#" className="logo"><img src="/assets/images/logo.svg" alt="Casmart logo" /></a>
+              <Link to="/" className="logo"><img src="/assets/images/logo.svg" alt="Casmart logo" /></Link>
               <p className="footer-text">Casmart is a fashion theme presenting a complete wardrobe of uniquely crafted Ethnic Wear, Casuals, Edgy Denims, &amp; Accessories.</p>
               <ul className="social-list">
                 {['logo-facebook','logo-twitter','logo-instagram','logo-pinterest'].map(icon=>(
@@ -801,8 +549,8 @@ export default function App() {
               ))}
             </ul>
             <ul className="footer-list">
-              <li><p className="footer-list-title">Help &amp; Support</p></li>
-              {['Dealers & Agents','FAQ Information','Return Policy','Shipping & Delivery','Order Tracking','List of Shops'].map(l=>(
+              <li><p className="footer-list-title">Help & Support</p></li>
+              {['Dealers & Agents','FAQ Information','Return Policy','Shipping & Delivery','Order Tranking','List of Shops'].map(l=>(
                 <li key={l}><a href="#" className="footer-link">{l}</a></li>
               ))}
             </ul>
@@ -810,11 +558,13 @@ export default function App() {
         </div>
         <div className="footer-bottom">
           <div className="container">
-            <p className="copyright">&copy; 2024 <a href="#">Casmart</a>. All Rights Reserved</p>
+            <p className="copyright">
+              &copy; 2026 <a href="#">codewithsadee</a>. All Rights Reserved
+            </p>
             <ul className="footer-bottom-list">
-              {['Privacy Policy','Terms & Conditions','Sitemap'].map(l=>(
-                <li key={l}><a href="#" className="footer-bottom-link">{l}</a></li>
-              ))}
+              <li><a href="#" className="footer-bottom-link">Privacy Policy</a></li>
+              <li><a href="#" className="footer-bottom-link">Terms & Conditions</a></li>
+              <li><a href="#" className="footer-bottom-link">Sitemap</a></li>
             </ul>
             <div className="payment">
               <p className="payment-title">We Support</p>
@@ -823,10 +573,6 @@ export default function App() {
           </div>
         </div>
       </footer>
-
-      {/* Ionicons */}
-      <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
-      <script noModule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
     </>
   );
 }

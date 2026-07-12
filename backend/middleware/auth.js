@@ -22,4 +22,15 @@ function verifyToken(req, res, next) {
   }
 }
 
-module.exports = { verifyToken, JWT_SECRET };
+/**
+ * Middleware: verifies if the authenticated user has admin role.
+ * Must be used AFTER verifyToken.
+ */
+function verifyAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden. Admin access required.' });
+  }
+  next();
+}
+
+module.exports = { verifyToken, verifyAdmin, JWT_SECRET };
