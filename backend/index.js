@@ -151,6 +151,41 @@ app.get('/api/auth/me', verifyToken, async (req, res) => {
   }
 });
 
+// PUT /api/auth/profile — update name
+app.put('/api/auth/profile', verifyToken, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+  try {
+    await db.query('UPDATE users SET name = ? WHERE id = ?', [name.trim(), req.user.id]);
+    const token = jwt.sign(
+      { id: req.user.id, name: name.trim(), email: req.user.email, role: req.user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    return res.json({ message: 'Profile updated.', token, user: { id: req.user.id, name: name.trim(), email: req.user.email, role: req.user.role } });
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// PUT /api/auth/password — change password
+app.put('/api/auth/password', verifyToken, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: 'Both old and new password are required.' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+  try {
+    const [rows] = await db.query('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+    const match = await bcrypt.compare(oldPassword, rows[0].password_hash);
+    if (!match) return res.status(401).json({ error: 'Current password is incorrect.' });
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, req.user.id]);
+    return res.json({ message: 'Password changed successfully.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 //  PAYMENT ROUTES (Protected)
 
 // POST /api/create-transaction 

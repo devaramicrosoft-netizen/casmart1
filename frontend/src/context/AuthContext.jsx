@@ -59,11 +59,17 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // updateUser — called after profile edit to sync state + token
+  const updateUser = useCallback((newUser, newToken) => {
+    if (newToken) localStorage.setItem('casmart_token', newToken);
+    setUser(newUser);
+  }, []);
+
   // getToken — for protected API calls 
   const getToken = useCallback(() => localStorage.getItem('casmart_token'), []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, getToken }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, getToken, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

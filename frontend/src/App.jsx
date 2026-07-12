@@ -5,7 +5,7 @@ import { useAuth } from './context/AuthContext.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import ChatWidget from './components/ChatWidget.jsx';
 import Shop from './pages/Shop.jsx';
-import Orders from './pages/Orders.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import { formatPrice, RATES } from './utils/formatPrice.js';
 
@@ -440,7 +440,7 @@ export default function App() {
                 <div style={{display:'flex',flexDirection:'column',lineHeight:1.2,alignItems:'flex-end'}}>
                   <span style={{fontSize:'0.78rem',fontWeight:700,color:'#1a1a1a',maxWidth:'80px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name.split(' ')[0]}</span>
                   <div style={{display:'flex', gap:'8px', fontSize:'0.75rem', marginTop:'3px'}}>
-                    <Link to="/orders" style={{color:'#666', textDecoration:'none', fontWeight:600}}>Orders</Link>
+                    <Link to="/profile" style={{color:'#666', textDecoration:'none', fontWeight:600}}>Profile</Link>
                     {user.role === 'admin' && (
                       <Link to="/admin" style={{color:'#e53935', textDecoration:'none', fontWeight:600}}>Admin</Link>
                     )}
@@ -518,7 +518,7 @@ export default function App() {
               showToast={showToast}
             />
           } />
-          <Route path="/orders" element={<Orders currency={currency} showToast={showToast} />} />
+          <Route path="/profile" element={<ProfilePage currency={currency} showToast={showToast} />} />
           <Route path="/admin" element={<AdminDashboard currency={currency} showToast={showToast} />} />
         </Routes>
       </main>
