@@ -9,7 +9,7 @@ import {
   Eye, EyeOff, AlertCircle, CheckCircle2, Ticket, Heart, MapPin, Trash2, ShoppingCart, RefreshCw
 } from 'lucide-react';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const AVATAR_COLORS = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',

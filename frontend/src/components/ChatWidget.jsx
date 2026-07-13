@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Bot, X, Send, MessageSquare, Maximize2, Minimize2, User, Headphones, ChevronLeft } from 'lucide-react';
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const MIN_W = 300, MIN_H = 360, MAX_W = 720, MAX_H = 800;
 const DEFAULT_W = 360, DEFAULT_H = 500;
 

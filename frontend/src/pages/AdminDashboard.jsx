@@ -11,7 +11,7 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice } from '../utils/formatPrice';
 
-const API = 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const BADGE_COLORS = ['', 'red', 'green', 'blue', 'orange', 'purple'];
 const EMPTY_FORM = {
   name: '', price: '', original_price: '',
