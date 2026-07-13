@@ -363,7 +363,9 @@ app.get('/api/orders', verifyToken, async (req, res) => {
     const [orders] = await db.query(
       `SELECT o.id, o.midtrans_order_id, o.gross_amount_idr, o.currency_display,
               o.status, o.created_at,
-              GROUP_CONCAT(oi.product_name ORDER BY oi.id SEPARATOR ', ') AS items_summary
+              GROUP_CONCAT(oi.product_name ORDER BY oi.id SEPARATOR ', ') AS items_summary,
+              (SELECT p.image FROM order_items oi2 JOIN products p ON oi2.product_id = p.id WHERE oi2.order_id = o.id LIMIT 1) AS first_item_image,
+              (SELECT p.id FROM order_items oi2 JOIN products p ON oi2.product_id = p.id WHERE oi2.order_id = o.id LIMIT 1) AS first_product_id
        FROM orders o
        LEFT JOIN order_items oi ON oi.order_id = o.id
        WHERE o.user_id = ?
@@ -458,7 +460,15 @@ app.post('/api/upload', verifyToken, verifyAdmin, upload.single('image'), (req, 
 // GET /api/products (Public) 
 app.get('/api/products', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM products ORDER BY id ASC');
+    const [rows] = await db.query(`
+      SELECT p.*, 
+             CAST(COALESCE(AVG(r.rating), 0) AS DECIMAL(3,1)) AS rating,
+             COUNT(r.id) AS reviews_count
+      FROM products p
+      LEFT JOIN reviews r ON p.id = r.product_id
+      GROUP BY p.id
+      ORDER BY p.id ASC
+    `);
     return res.status(200).json({ products: rows });
   } catch (err) {
     console.error('Products fetch error:', err);
@@ -503,6 +513,76 @@ app.delete('/api/products/:id', verifyToken, verifyAdmin, async (req, res) => {
     return res.status(200).json({ message: 'Product deleted' });
   } catch (err) {
     console.error('Product delete error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+//  REVIEWS ROUTES
+
+// GET /api/products/:id/reviews (Public)
+app.get('/api/products/:id/reviews', async (req, res) => {
+  try {
+    const [reviews] = await db.query(`
+      SELECT r.id, r.rating, r.comment, r.created_at, u.name as user_name
+      FROM reviews r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.product_id = ?
+      ORDER BY r.created_at DESC
+    `, [req.params.id]);
+    return res.status(200).json({ reviews });
+  } catch (err) {
+    console.error('Fetch reviews error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// POST /api/products/:id/reviews (Protected)
+app.post('/api/products/:id/reviews', verifyToken, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const userId = req.user.id;
+    const { rating, comment, order_id } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Valid rating (1-5) is required.' });
+    }
+
+    // Verify user bought the product and it's successful
+    let orderCondition = order_id ? 'AND o.id = ?' : '';
+    let queryParams = order_id ? [userId, productId, order_id] : [userId, productId];
+    
+    const [orders] = await db.query(`
+      SELECT o.id, o.status 
+      FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.user_id = ? AND oi.product_id = ? ${orderCondition}
+      ORDER BY o.created_at DESC LIMIT 1
+    `, queryParams);
+
+    if (orders.length === 0 || orders[0].status !== 'success') {
+      return res.status(403).json({ error: 'You can only review products you have successfully purchased.' });
+    }
+
+    const actualOrderId = orders[0].id;
+
+    // Check if already reviewed for this order
+    const [existingReview] = await db.query(
+      'SELECT id FROM reviews WHERE user_id = ? AND product_id = ? AND order_id = ?',
+      [userId, productId, actualOrderId]
+    );
+
+    if (existingReview.length > 0) {
+      return res.status(400).json({ error: 'You have already reviewed this product from this order.' });
+    }
+
+    await db.query(
+      'INSERT INTO reviews (user_id, product_id, order_id, rating, comment) VALUES (?, ?, ?, ?, ?)',
+      [userId, productId, actualOrderId, rating, comment || null]
+    );
+
+    return res.status(201).json({ message: 'Review submitted successfully.' });
+  } catch (err) {
+    console.error('Submit review error:', err);
     return res.status(500).json({ error: 'Server error.' });
   }
 });
@@ -716,6 +796,22 @@ async function initLiveChatTables() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
   console.log('✅ Voucher tables ready');
+
+  // Reviews table
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id    INT UNSIGNED NOT NULL,
+      product_id INT UNSIGNED NOT NULL,
+      order_id   INT UNSIGNED NULL,
+      rating     TINYINT NOT NULL,
+      comment    TEXT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_product (product_id),
+      INDEX idx_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  console.log('✅ Reviews table ready');
 }
 initLiveChatTables().catch(console.error);
 

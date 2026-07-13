@@ -1476,11 +1476,12 @@ export default function AdminDashboard({ currency, showToast }) {
                           onChange={(e) => updateOrderStatus(order.id, e.target.value)}
                           style={{
                             padding: '6px 12px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, border: '1px solid #e0e0e0', cursor: 'pointer', outline: 'none',
-                            background: order.status === 'success' || order.status === 'completed' || order.status === 'shipped' ? '#e8f5e9' : order.status === 'pending' ? '#fff3e0' : '#ffebee',
-                            color: order.status === 'success' || order.status === 'completed' || order.status === 'shipped' ? '#2e7d32' : order.status === 'pending' ? '#ef6c00' : '#c62828'
+                            background: ['success', 'completed', 'shipped', 'settlement'].includes(order.status) ? '#e8f5e9' : order.status === 'pending' ? '#fff3e0' : '#ffebee',
+                            color: ['success', 'completed', 'shipped', 'settlement'].includes(order.status) ? '#2e7d32' : order.status === 'pending' ? '#ef6c00' : '#c62828'
                           }}
                         >
                           <option value="pending">Pending</option>
+                          <option value="success">Paid (Success)</option>
                           <option value="settlement">Paid (Settlement)</option>
                           <option value="shipped">Shipped</option>
                           <option value="completed">Completed</option>

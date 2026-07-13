@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { formatPrice } from '../utils/formatPrice';
+import { formatPrice, RATES } from '../utils/formatPrice';
 import {
   User, ShoppingBag, Shield, LogOut, ChevronRight, Edit3,
   Lock, Check, X, Loader2, Package, Calendar, CreditCard,
@@ -34,11 +34,14 @@ function Avatar({ name, color, size = 80, avatarUrl }) {
 
 function StatusBadge({ status }) {
   const map = {
-    success: { bg: '#E8F5E9', color: '#2E7D32', label: 'Success' },
-    pending: { bg: '#FFF8E1', color: '#F57F17', label: 'Pending' },
-    failure: { bg: '#FFEBEE', color: '#C62828', label: 'Failed' },
-    expire:  { bg: '#F3E5F5', color: '#6A1B9A', label: 'Expired' },
-    cancel:  { bg: '#EEEEEE', color: '#616161', label: 'Cancelled' },
+    success:   { bg: '#E8F5E9', color: '#2E7D32', label: 'Success' },
+    completed: { bg: '#E3F2FD', color: '#1565C0', label: 'Completed' },
+    shipped:   { bg: '#E0F7FA', color: '#006064', label: 'Shipped' },
+    settlement:{ bg: '#E8F5E9', color: '#2E7D32', label: 'Success' },
+    pending:   { bg: '#FFF8E1', color: '#F57F17', label: 'Pending' },
+    failure:   { bg: '#FFEBEE', color: '#C62828', label: 'Failed' },
+    expire:    { bg: '#F3E5F5', color: '#6A1B9A', label: 'Expired' },
+    cancel:    { bg: '#EEEEEE', color: '#616161', label: 'Cancelled' },
   };
   const s = map[status] || map.failure;
   return (
@@ -213,6 +216,12 @@ function OrdersTab({ user, getToken, currency, showToast }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [reviewModal, setReviewModal] = useState(null); // { orderId, productId, productName }
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewedOrders, setReviewedOrders] = useState(new Set());
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -222,8 +231,35 @@ function OrdersTab({ user, getToken, currency, showToast }) {
       .finally(() => setLoading(false));
   }, [user, getToken, showToast]);
 
-  const statusFilters = ['all', 'success', 'pending', 'failure', 'expire', 'cancel'];
-  const filtered = filter === 'all' ? orders : orders.filter(o => o.status === filter);
+  const openReviewModal = (order) => {
+    setReviewModal({ orderId: order.id, productId: order.first_product_id, productName: order.items_summary });
+    setReviewRating(0);
+    setReviewComment('');
+    setReviewHover(0);
+  };
+
+  const submitReview = async () => {
+    if (!reviewRating) { showToast('Please select a star rating!'); return; }
+    setSubmittingReview(true);
+    try {
+      await axios.post(
+        `${API}/api/products/${reviewModal.productId}/reviews`,
+        { rating: reviewRating, comment: reviewComment, order_id: reviewModal.orderId },
+        { headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+      showToast('✅ Review submitted! Thank you!');
+      setReviewedOrders(prev => new Set([...prev, reviewModal.orderId]));
+      setReviewModal(null);
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+
+  const statusFilters = ['all', 'success', 'shipped', 'completed', 'pending', 'failure', 'expire', 'cancel'];
+  const filtered = filter === 'all' ? orders : orders.filter(o => o.status === filter || (filter === 'success' && o.status === 'settlement'));
 
   return (
     <div style={card}>
@@ -284,8 +320,17 @@ function OrdersTab({ user, getToken, currency, showToast }) {
               {/* Card Body */}
               <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '16px', flex: 1, minWidth: '300px' }}>
-                  <div style={{ width: '60px', height: '60px', background: '#f5f5f5', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Package size={24} color="#ccc" />
+                  <div style={{ width: '60px', height: '60px', background: '#f5f5f5', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {order.first_item_image ? (
+                      <img 
+                        src={order.first_item_image} 
+                        alt="Product" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <Package size={24} color="#ccc" />
+                    )}
                   </div>
                   <div>
                     <h4 style={{ margin: '0 0 4px', fontSize: '1rem', color: '#333', fontFamily: 'Jost', fontWeight: 600 }}>Casmart Order</h4>
@@ -297,12 +342,110 @@ function OrdersTab({ user, getToken, currency, showToast }) {
                 <div style={{ borderLeft: '1px solid #eee', paddingLeft: '24px', minWidth: '150px' }}>
                   <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: '#888', fontFamily: 'Jost' }}>Total Price</p>
                   <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#e53935', fontFamily: 'Jost' }}>
-                    {formatPrice(order.gross_amount_idr / 20500, currency)}
+                    {formatPrice(order.gross_amount_idr / RATES.IDR, currency)}
                   </p>
                 </div>
               </div>
+              {/* Review Footer */}
+              {['success', 'completed', 'settlement'].includes(order.status) && order.first_product_id && (
+                <div style={{ padding: '12px 24px', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'flex-end', background: '#fafafa' }}>
+                  {reviewedOrders.has(order.id) ? (
+                    <span style={{ color: '#4caf50', fontFamily: 'Jost', fontSize: '0.85rem', fontWeight: 600 }}>✅ Reviewed</span>
+                  ) : (
+                    <button
+                      onClick={() => openReviewModal(order)}
+                      style={{
+                        padding: '8px 20px', border: '2px solid #e53935', borderRadius: '8px',
+                        background: 'transparent', color: '#e53935', fontFamily: 'Jost',
+                        fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#e53935'; e.currentTarget.style.color = '#fff'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#e53935'; }}
+                    >
+                      ⭐ Leave a Review
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Review Modal */}
+      {reviewModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }} onClick={() => setReviewModal(null)}>
+          <div style={{
+            background: '#fff', borderRadius: '20px', padding: '40px', maxWidth: '480px',
+            width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', position: 'relative'
+          }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setReviewModal(null)} style={{
+              position: 'absolute', top: '16px', right: '16px', background: '#f5f5f5',
+              border: 'none', borderRadius: '50%', width: '32px', height: '32px',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}><X size={16} /></button>
+            
+            <h3 style={{ fontFamily: 'Jost', fontWeight: 700, fontSize: '1.3rem', color: '#222', margin: '0 0 6px' }}>
+              Leave a Review
+            </h3>
+            <p style={{ fontFamily: 'Jost', color: '#888', fontSize: '0.9rem', margin: '0 0 28px' }}>
+              {reviewModal.productName}
+            </p>
+
+            {/* Star Rating */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', justifyContent: 'center' }}>
+              {[1,2,3,4,5].map(star => (
+                <span key={star}
+                  onMouseEnter={() => setReviewHover(star)}
+                  onMouseLeave={() => setReviewHover(0)}
+                  onClick={() => setReviewRating(star)}
+                  style={{ cursor: 'pointer', fontSize: '2.5rem', transition: 'transform 0.1s',
+                    transform: (reviewHover || reviewRating) >= star ? 'scale(1.2)' : 'scale(1)',
+                    filter: (reviewHover || reviewRating) >= star ? 'none' : 'grayscale(1) opacity(0.4)'
+                  }}
+                >
+                  ⭐
+                </span>
+              ))}
+            </div>
+            <div style={{ textAlign: 'center', marginBottom: '20px', fontFamily: 'Jost', fontSize: '0.9rem', color: '#666', minHeight: '20px' }}>
+              {['', 'Very Bad 😞', 'Poor 😕', 'Okay 😐', 'Good 😊', 'Excellent! 🤩'][reviewRating]}
+            </div>
+
+            {/* Comment */}
+            <textarea
+              value={reviewComment}
+              onChange={e => setReviewComment(e.target.value)}
+              placeholder="Share your experience with this product (optional)..."
+              rows={4}
+              style={{
+                width: '100%', padding: '14px', border: '2px solid #e8e8e8',
+                borderRadius: '10px', fontFamily: 'Jost', fontSize: '0.9rem', resize: 'none',
+                outline: 'none', boxSizing: 'border-box',
+                transition: 'border-color 0.2s'
+              }}
+              onFocus={e => e.target.style.borderColor = '#e53935'}
+              onBlur={e => e.target.style.borderColor = '#e8e8e8'}
+            />
+
+            <button
+              onClick={submitReview}
+              disabled={submittingReview || !reviewRating}
+              style={{
+                marginTop: '16px', width: '100%', padding: '14px', border: 'none',
+                borderRadius: '10px', background: reviewRating ? '#e53935' : '#ccc',
+                color: '#fff', fontFamily: 'Jost', fontWeight: 700, fontSize: '1rem',
+                cursor: reviewRating ? 'pointer' : 'not-allowed', transition: 'all 0.2s'
+              }}
+            >
+              {submittingReview ? 'Submitting...' : 'Submit Review'}
+            </button>
+          </div>
         </div>
       )}
     </div>

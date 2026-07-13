@@ -49,6 +49,19 @@ function ProductCard({ product, onAddToCart, onQuickView, wishlist, onToggleWish
           <h3 className="h4 card-title">
             <a href="#" onClick={e=>{e.preventDefault();onQuickView(product);}}>{product.name}</a>
           </h3>
+          {/* Star Rating */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', gap: '2px' }}>
+              {[1,2,3,4,5].map(s => (
+                <span key={s} style={{ fontSize: '13px', color: parseFloat(product.rating) >= s ? '#f59e0b' : '#ddd' }}>★</span>
+              ))}
+            </div>
+            <span style={{ fontSize: '0.78rem', color: '#888', fontFamily: 'Jost' }}>
+              {parseFloat(product.rating) > 0
+                ? `${parseFloat(product.rating).toFixed(1)} (${product.reviews_count})`
+                : 'No reviews'}
+            </span>
+          </div>
           <div className="card-price">
             <data value={product.price}>{formatPrice(product.price, currency)}</data>
             {product.original_price && <data value={product.original_price}>{formatPrice(product.original_price, currency)}</data>}

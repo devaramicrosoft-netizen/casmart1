@@ -53,6 +53,22 @@ function CurrencySwitcher({ currency, onChange }) {
 
 // Quick View Modal 
 function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, isWished }) {
+  const [reviews, setReviews] = React.useState([]);
+  const [reviewsLoading, setReviewsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!product) return;
+    setReviewsLoading(true);
+    fetch(`http://localhost:5000/api/products/${product.id}/reviews`)
+      .then(r => r.json())
+      .then(d => setReviews(d.reviews || []))
+      .catch(() => setReviews([]))
+      .finally(() => setReviewsLoading(false));
+  }, [product?.id]);
+
+  const avgRating = parseFloat(product?.rating) || 0;
+  const reviewCount = parseInt(product?.reviews_count) || reviews.length;
+
   if (!product) return null;
   return (
     <>
@@ -75,13 +91,16 @@ function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, 
 
         {/* Right Side: Details */}
         <div style={{padding:'40px 48px',flex:1,overflowY:'auto', display:'flex', flexDirection:'column'}}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f5b041', marginBottom: '12px' }}>
-             <ion-icon name="star"></ion-icon>
-             <ion-icon name="star"></ion-icon>
-             <ion-icon name="star"></ion-icon>
-             <ion-icon name="star"></ion-icon>
-             <ion-icon name="star-half"></ion-icon>
-             <span style={{ color: '#888', fontSize: '0.85rem', marginLeft: '6px' }}>(4.8 / 5 Reviews)</span>
+          {/* Real Star Rating */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '2px' }}>
+              {[1,2,3,4,5].map(s => (
+                <span key={s} style={{ fontSize: '18px', color: avgRating >= s ? '#f59e0b' : avgRating >= s - 0.5 ? '#f59e0b' : '#e0e0e0' }}>★</span>
+              ))}
+            </div>
+            <span style={{ color: '#888', fontSize: '0.85rem', marginLeft: '4px' }}>
+              {avgRating > 0 ? `${avgRating.toFixed(1)} / 5 · ${reviewCount} Review${reviewCount !== 1 ? 's' : ''}` : 'No reviews yet'}
+            </span>
           </div>
 
           <h2 style={{margin:'0 0 12px',fontSize:'1.8rem',fontWeight:800,color:'#1a1a1a', lineHeight:1.2}}>{product.name}</h2>
@@ -110,7 +129,7 @@ function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, 
             </div>
           </div>
 
-          <div style={{ marginTop: 'auto', display: 'flex', gap: '16px' }}>
+          <div style={{ marginBottom: '24px', display: 'flex', gap: '16px' }}>
             <button
               onClick={() => { onAddToCart(product); onClose(); }}
               style={{flex:1,padding:'16px',background:'#1a1a1a',color:'#fff',border:'none',borderRadius:'12px',fontFamily:'Jost,sans-serif',fontWeight:700,fontSize:'1.1rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',transition:'all 0.2s', boxShadow:'0 8px 20px rgba(0,0,0,0.15)'}}
@@ -128,6 +147,33 @@ function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, 
               <Heart size={22} fill={isWished ? '#e53935' : 'none'} />
             </button>
           </div>
+
+          {/* Reviews Section */}
+          {reviews.length > 0 && (
+            <div style={{ borderTop: '1px solid #eee', paddingTop: '24px' }}>
+              <h4 style={{ fontFamily: 'Jost', fontWeight: 700, color: '#222', margin: '0 0 16px', fontSize: '1rem' }}>
+                Customer Reviews ({reviews.length})
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '220px', overflowY: 'auto' }}>
+                {reviews.map(r => (
+                  <div key={r.id} style={{ padding: '14px', background: '#f9f9f9', borderRadius: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#333', fontFamily: 'Jost' }}>{r.user_name}</span>
+                        <div style={{ display: 'flex', gap: '2px', marginTop: '2px' }}>
+                          {[1,2,3,4,5].map(s => <span key={s} style={{ fontSize: '12px', color: r.rating >= s ? '#f59e0b' : '#ddd' }}>★</span>)}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.78rem', color: '#aaa', fontFamily: 'Jost' }}>
+                        {new Date(r.created_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })}
+                      </span>
+                    </div>
+                    {r.comment && <p style={{ margin: 0, fontSize: '0.88rem', color: '#555', lineHeight: 1.6, fontFamily: 'Jost' }}>{r.comment}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         
         <button onClick={onClose} style={{position:'absolute',top:'24px',right:'24px',background:'#f5f5f5',border:'none',borderRadius:'50%',width:'40px',height:'40px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center', color:'#555', transition:'background 0.2s'}}
