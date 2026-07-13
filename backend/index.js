@@ -9,6 +9,7 @@ const Groq         = require('groq-sdk');
 const multer       = require('multer');
 const path         = require('path');
 const fs           = require('fs');
+const crypto       = require('crypto');
 const { Server }   = require('socket.io');
 
 dotenv.config();
@@ -217,7 +218,7 @@ app.post('/api/auth/avatar', verifyToken, upload.single('avatar'), async (req, r
 
 // POST /api/create-transaction 
 app.post('/api/create-transaction', verifyToken, async (req, res) => {
-  const { order_id, gross_amount, customer_details, item_details, currency_display } = req.body;
+  const { order_id, gross_amount, customer_details, item_details, currency_display, voucher_code, discount_amount } = req.body;
 
   // Use logged-in user's name & email as customer details
   const customer = {
@@ -230,14 +231,48 @@ app.post('/api/create-transaction', verifyToken, async (req, res) => {
   const midtransOrderId = order_id || ('CASMART-' + Date.now());
 
   try {
+    // Validate voucher if provided
+    let appliedVoucher = null;
+    let finalDiscount = 0;
+    if (voucher_code) {
+      const [vrows] = await db.query(
+        'SELECT * FROM vouchers WHERE code = ? AND is_active = 1',
+        [voucher_code.toUpperCase().trim()]
+      );
+      if (vrows.length > 0) {
+        const v = vrows[0];
+        const isExpired = v.expires_at && new Date(v.expires_at) < new Date();
+        const isExhausted = v.max_uses > 0 && v.used_count >= v.max_uses;
+        if (!isExpired && !isExhausted) {
+          appliedVoucher = v;
+          finalDiscount = discount_amount || 0;
+        }
+      }
+    }
+
+    let finalGrossAmount = gross_amount;
+    const finalItemDetails = item_details ? [...item_details] : [];
+
+    if (appliedVoucher && finalDiscount > 0) {
+      finalGrossAmount = gross_amount - finalDiscount;
+      if (finalGrossAmount < 0) finalGrossAmount = 0;
+      
+      finalItemDetails.push({
+        id: 'DISCOUNT',
+        price: -finalDiscount,
+        quantity: 1,
+        name: `Voucher: ${appliedVoucher.code}`
+      });
+    }
+
     const parameter = {
       transaction_details: {
         order_id:     midtransOrderId,
-        gross_amount: gross_amount || 10000,
+        gross_amount: finalGrossAmount || 10000,
       },
       credit_card: { secure: true },
       customer_details: customer,
-      ...(item_details ? { item_details } : {}),
+      ...(finalItemDetails.length > 0 ? { item_details: finalItemDetails } : {}),
     };
 
     const transaction = await snap.createTransaction(parameter);
@@ -247,7 +282,7 @@ app.post('/api/create-transaction', verifyToken, async (req, res) => {
       `INSERT INTO orders 
         (user_id, midtrans_order_id, gross_amount_idr, currency_display, status, snap_token)
        VALUES (?, ?, ?, ?, 'pending', ?)`,
-      [req.user.id, midtransOrderId, gross_amount, currency_display || 'IDR', transaction.token]
+      [req.user.id, midtransOrderId, finalGrossAmount, currency_display || 'IDR', transaction.token]
     );
 
     // Save order items
@@ -265,9 +300,22 @@ app.post('/api/create-transaction', verifyToken, async (req, res) => {
       );
     }
 
+    // Record voucher usage
+    if (appliedVoucher) {
+      await db.query(
+        'INSERT INTO voucher_usages (voucher_id, user_id, order_id, discount_amount) VALUES (?, ?, ?, ?)',
+        [appliedVoucher.id, req.user.id, orderResult.insertId, finalDiscount]
+      );
+      await db.query(
+        'UPDATE vouchers SET used_count = used_count + 1 WHERE id = ?',
+        [appliedVoucher.id]
+      );
+    }
+
     return res.status(200).json({
-      token:        transaction.token,
-      redirect_url: transaction.redirect_url,
+      token:           transaction.token,
+      redirect_url:    transaction.redirect_url,
+      applied_voucher: appliedVoucher ? { code: appliedVoucher.code, discount: finalDiscount } : null
     });
   } catch (err) {
     console.error('Transaction error:', err.message);
@@ -275,7 +323,41 @@ app.post('/api/create-transaction', verifyToken, async (req, res) => {
   }
 });
 
-// GET /api/orders 
+// POST /api/midtrans/webhook
+app.post('/api/midtrans/webhook', async (req, res) => {
+  try {
+    const { order_id, status_code, gross_amount, signature_key, transaction_status } = req.body;
+    
+    // Verify signature
+    const serverKey = process.env.MIDTRANS_SERVER_KEY || 'YOUR_SERVER_KEY';
+    const hash = crypto.createHash('sha512').update(order_id + status_code + gross_amount + serverKey).digest('hex');
+    
+    if (hash !== signature_key) {
+      return res.status(403).json({ error: 'Invalid signature key' });
+    }
+    
+    // Determine status
+    let status = 'pending';
+    if (transaction_status === 'capture' || transaction_status === 'settlement') {
+      status = 'success';
+    } else if (transaction_status === 'deny' || transaction_status === 'cancel' || transaction_status === 'expire') {
+      status = 'cancel'; // you can also use 'failure' or 'expire' based on requirements
+    }
+
+    // Update database
+    await db.query(
+      'UPDATE orders SET status = ? WHERE midtrans_order_id = ?',
+      [status, order_id]
+    );
+
+    return res.status(200).json({ status: 'OK' });
+  } catch (err) {
+    console.error('Webhook error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/orders  
 app.get('/api/orders', verifyToken, async (req, res) => {
   try {
     const [orders] = await db.query(
@@ -562,12 +644,12 @@ Tugasmu: Jawab pertanyaan seputar produk dan toko Casmart dengan ramah. Rekomend
 
 // GET / 
 app.get('/', (req, res) => {
-  res.json({ message: 'Casmart Payment Gateway API v2.0 — Auth + MySQL + Live Chat enabled' });
+  res.json({ message: 'Casmart Payment Gateway API v2.0 — Auth + MySQL + Live Chat + Vouchers enabled' });
 });
 
 //  LIVE CHAT — DB SETUP + REST + SOCKET.IO
 
-// Auto-create live_chat tables if not exist
+// Auto-create all tables if not exist
 async function initLiveChatTables() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS live_chats (
@@ -603,8 +685,257 @@ async function initLiveChatTables() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
   console.log('✅ Wishlists table ready');
+
+  // Voucher tables
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS vouchers (
+      id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      code          VARCHAR(50) NOT NULL UNIQUE,
+      type          ENUM('percent','fixed') NOT NULL DEFAULT 'percent',
+      value         DECIMAL(12,2) NOT NULL,
+      min_order     DECIMAL(12,2) NOT NULL DEFAULT 0,
+      max_uses      INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 = unlimited',
+      used_count    INT UNSIGNED NOT NULL DEFAULT 0,
+      expires_at    DATETIME NULL,
+      is_active     TINYINT(1) NOT NULL DEFAULT 1,
+      description   VARCHAR(255) NULL,
+      created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS voucher_usages (
+      id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      voucher_id      INT UNSIGNED NOT NULL,
+      user_id         INT UNSIGNED NOT NULL,
+      order_id        INT UNSIGNED NULL,
+      discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      used_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_voucher (voucher_id),
+      INDEX idx_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  console.log('✅ Voucher tables ready');
 }
 initLiveChatTables().catch(console.error);
+
+// ═══════════════════════════════════════════
+//   VOUCHER ROUTES
+// ═══════════════════════════════════════════
+
+// GET /api/vouchers — Admin: list all vouchers
+app.get('/api/vouchers', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT v.*,
+        COUNT(vu.id) AS usage_total,
+        COALESCE(SUM(vu.discount_amount), 0) AS total_discount_given
+      FROM vouchers v
+      LEFT JOIN voucher_usages vu ON vu.voucher_id = v.id
+      GROUP BY v.id
+      ORDER BY v.created_at DESC
+    `);
+    return res.json({ vouchers: rows });
+  } catch (err) {
+    console.error('Vouchers fetch error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/vouchers — Admin: create voucher
+app.post('/api/vouchers', verifyToken, verifyAdmin, async (req, res) => {
+  const { code, type, value, min_order, max_uses, expires_at, is_active, description } = req.body;
+  if (!code || !type || !value)
+    return res.status(400).json({ error: 'Code, type, and value are required.' });
+  try {
+    const [result] = await db.query(
+      `INSERT INTO vouchers (code, type, value, min_order, max_uses, expires_at, is_active, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        code.toUpperCase().trim(),
+        type,
+        value,
+        min_order || 0,
+        max_uses || 0,
+        expires_at || null,
+        is_active !== undefined ? is_active : 1,
+        description || null
+      ]
+    );
+    return res.status(201).json({ id: result.insertId, message: 'Voucher created successfully.' });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return res.status(409).json({ error: 'Voucher code already exists.' });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/vouchers/:id — Admin: update voucher
+app.put('/api/vouchers/:id', verifyToken, verifyAdmin, async (req, res) => {
+  const { code, type, value, min_order, max_uses, expires_at, is_active, description } = req.body;
+  try {
+    await db.query(
+      `UPDATE vouchers SET code=?, type=?, value=?, min_order=?, max_uses=?, expires_at=?, is_active=?, description=?
+       WHERE id=?`,
+      [
+        code.toUpperCase().trim(), type, value,
+        min_order || 0, max_uses || 0,
+        expires_at || null, is_active !== undefined ? is_active : 1,
+        description || null, req.params.id
+      ]
+    );
+    return res.json({ message: 'Voucher updated.' });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY')
+      return res.status(409).json({ error: 'Voucher code already exists.' });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/vouchers/:id — Admin: delete voucher
+app.delete('/api/vouchers/:id', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    await db.query('DELETE FROM vouchers WHERE id = ?', [req.params.id]);
+    return res.json({ message: 'Voucher deleted.' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/vouchers/validate — User: validate a voucher code
+app.post('/api/vouchers/validate', verifyToken, async (req, res) => {
+  const { code, order_amount } = req.body;
+  if (!code) return res.status(400).json({ error: 'Voucher code is required.' });
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM vouchers WHERE code = ? AND is_active = 1',
+      [code.toUpperCase().trim()]
+    );
+    if (rows.length === 0)
+      return res.status(404).json({ error: 'Voucher code not found or inactive.' });
+
+    const v = rows[0];
+
+    // Check expiry
+    if (v.expires_at && new Date(v.expires_at) < new Date())
+      return res.status(400).json({ error: 'Voucher has expired.' });
+
+    // Check max uses
+    if (v.max_uses > 0 && v.used_count >= v.max_uses)
+      return res.status(400).json({ error: 'Voucher usage limit has been reached.' });
+
+    // Check min order
+    if (order_amount && Number(order_amount) < Number(v.min_order))
+      return res.status(400).json({
+        error: `Minimum order amount is ${v.min_order} to use this voucher.`
+      });
+
+    // Check if user already used this voucher
+    const [usages] = await db.query(
+      'SELECT id FROM voucher_usages WHERE voucher_id = ? AND user_id = ?',
+      [v.id, req.user.id]
+    );
+    if (usages.length > 0)
+      return res.status(400).json({ error: 'You have already used this voucher.' });
+
+    // Calculate discount
+    let discountAmount = 0;
+    if (v.type === 'percent') {
+      discountAmount = ((order_amount || 0) * Number(v.value)) / 100;
+    } else {
+      discountAmount = Number(v.value);
+    }
+    discountAmount = Math.min(discountAmount, order_amount || discountAmount);
+
+    return res.json({
+      valid: true,
+      voucher: {
+        id: v.id, code: v.code, type: v.type, value: v.value,
+        description: v.description, discount_amount: discountAmount
+      }
+    });
+  } catch (err) {
+    console.error('Voucher validate error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════
+//   ADMIN ANALYTICS
+// ═══════════════════════════════════════════
+
+// GET /api/admin/analytics
+app.get('/api/admin/analytics', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    // Revenue per day (last 7 days)
+    const [revenueRows] = await db.query(`
+      SELECT DATE(created_at) as date,
+             COUNT(*) as order_count,
+             SUM(gross_amount_idr) as revenue
+      FROM orders
+      WHERE status IN ('success','settlement','completed','shipped')
+        AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+
+    // Orders by status
+    const [statusRows] = await db.query(`
+      SELECT status, COUNT(*) as count
+      FROM orders
+      GROUP BY status
+    `);
+
+    // Top 5 products by order count
+    const [topProducts] = await db.query(`
+      SELECT oi.product_name, COUNT(*) as sold_count, SUM(oi.quantity) as total_qty
+      FROM order_items oi
+      JOIN orders o ON o.id = oi.order_id
+      GROUP BY oi.product_name
+      ORDER BY total_qty DESC
+      LIMIT 5
+    `);
+
+    // Voucher stats
+    const [voucherStats] = await db.query(`
+      SELECT v.code, v.type, v.value, v.used_count,
+             COUNT(vu.id) as usage_count,
+             COALESCE(SUM(vu.discount_amount), 0) as total_discount
+      FROM vouchers v
+      LEFT JOIN voucher_usages vu ON vu.voucher_id = v.id
+      GROUP BY v.id
+      ORDER BY usage_count DESC
+      LIMIT 10
+    `);
+
+    // Total summary
+    const [[summary]] = await db.query(`
+      SELECT
+        COUNT(*) as total_orders,
+        COALESCE(SUM(CASE WHEN status IN ('success','settlement','completed','shipped') THEN gross_amount_idr END), 0) as total_revenue,
+        COUNT(DISTINCT user_id) as total_customers
+      FROM orders
+    `);
+
+    const [[userCount]] = await db.query('SELECT COUNT(*) as total FROM users');
+    const [[voucherCount]] = await db.query('SELECT COUNT(*) as total FROM vouchers WHERE is_active = 1');
+
+    return res.json({
+      revenue_trend: revenueRows,
+      orders_by_status: statusRows,
+      top_products: topProducts,
+      voucher_stats: voucherStats,
+      summary: {
+        ...summary,
+        total_users: userCount.total,
+        active_vouchers: voucherCount.total
+      }
+    });
+  } catch (err) {
+    console.error('Analytics error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 // GET /api/live-chats (Admin — list all chats) 
 app.get('/api/live-chats', verifyToken, verifyAdmin, async (req, res) => {

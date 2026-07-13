@@ -141,8 +141,38 @@ function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, 
 
 // Cart Drawer 
 function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, isLoading, currency, onCurrencyChange }) {
+  const { user, getToken } = useAuth();
   const total      = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const totalItems = cart.reduce((s, i) => s + i.qty, 0);
+  const [voucherCode, setVoucherCode]     = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState(null);
+  const [voucherError, setVoucherError]   = useState('');
+  const [voucherLoading, setVoucherLoading] = useState(false);
+
+  const applyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    if (!user) { setVoucherError('Login dulu untuk menggunakan voucher.'); return; }
+    setVoucherLoading(true); setVoucherError('');
+    try {
+      const grossAmount = Math.round(total * RATES.IDR);
+      const res = await fetch('http://localhost:5000/api/vouchers/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+        body: JSON.stringify({ code: voucherCode.trim(), order_amount: grossAmount })
+      });
+      const data = await res.json();
+      if (!res.ok) { setVoucherError(data.error || 'Voucher tidak valid.'); return; }
+      setAppliedVoucher(data.voucher);
+    } catch { setVoucherError('Tidak dapat terhubung ke server.'); }
+    finally { setVoucherLoading(false); }
+  };
+
+  const removeVoucher = () => { setAppliedVoucher(null); setVoucherCode(''); setVoucherError(''); };
+
+  // Convert IDR discount to base-GBP for display
+  const discountIDR = appliedVoucher ? appliedVoucher.discount_amount : 0;
+  const discountDisplay = discountIDR / RATES.IDR;
+  const finalTotal = total - discountDisplay;
 
   return (
     <>
@@ -217,30 +247,72 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
         {/* Footer */}
         {cart.length > 0 && (
           <div style={{padding:'20px 24px',borderTop:'1px solid #f0f0f0',background:'#fafafa'}}>
+
+            {/* Voucher Input */}
+            <div style={{marginBottom:'14px'}}>
+              {appliedVoucher ? (
+                <div style={{display:'flex',alignItems:'center',gap:'8px',padding:'10px 14px',background:'linear-gradient(135deg,#e8f5e9,#f1f8e9)',borderRadius:'10px',border:'1.5px solid #a5d6a7'}}>
+                  <CheckCircle size={16} color="#388e3c" style={{flexShrink:0}} />
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{margin:0,fontSize:'0.82rem',fontWeight:800,color:'#2e7d32'}}>🎟️ {appliedVoucher.code} — {appliedVoucher.type === 'percent' ? `${appliedVoucher.value}% OFF` : `Rp${Number(appliedVoucher.value).toLocaleString('id-ID')} OFF`}</p>
+                    {appliedVoucher.description && <p style={{margin:'2px 0 0',fontSize:'0.75rem',color:'#66bb6a'}}>{appliedVoucher.description}</p>}
+                  </div>
+                  <button onClick={removeVoucher} style={{background:'none',border:'none',cursor:'pointer',color:'#888',display:'flex',padding:0,flexShrink:0}}><X size={16} /></button>
+                </div>
+              ) : (
+                <div>
+                  <div style={{display:'flex',gap:'8px'}}>
+                    <input
+                      value={voucherCode}
+                      onChange={e => { setVoucherCode(e.target.value.toUpperCase()); setVoucherError(''); }}
+                      placeholder="Kode Voucher (e.g. HEMAT50)"
+                      onKeyDown={e => e.key === 'Enter' && applyVoucher()}
+                      style={{flex:1,padding:'10px 14px',border:`1.5px solid ${voucherError ? '#ef5350' : '#e0e0e0'}`,borderRadius:'8px',fontFamily:'Jost,sans-serif',fontSize:'0.88rem',outline:'none',letterSpacing:'1px',fontWeight:600,textTransform:'uppercase',background:'#fff'}}
+                    />
+                    <button
+                      onClick={applyVoucher}
+                      disabled={!voucherCode.trim() || voucherLoading}
+                      style={{padding:'10px 16px',background: voucherCode.trim() ? 'linear-gradient(135deg,#667eea,#764ba2)' : '#e0e0e0',color:'#fff',border:'none',borderRadius:'8px',cursor: voucherCode.trim() ? 'pointer' : 'not-allowed',fontFamily:'Jost,sans-serif',fontWeight:700,fontSize:'0.82rem',whiteSpace:'nowrap',transition:'all 0.2s'}}
+                    >
+                      {voucherLoading ? '...' : 'Pakai'}
+                    </button>
+                  </div>
+                  {voucherError && <p style={{margin:'6px 0 0',fontSize:'0.78rem',color:'#ef5350',fontFamily:'Jost,sans-serif'}}>{voucherError}</p>}
+                </div>
+              )}
+            </div>
+
+            {/* Summary */}
             <div style={{background:'#fff',borderRadius:'10px',padding:'14px 16px',marginBottom:'16px',border:'1px solid #f0f0f0'}}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:'8px',fontSize:'0.88rem',color:'#888'}}>
                 <span>Subtotal ({totalItems} item{totalItems>1?'s':''})</span>
                 <span style={{fontWeight:700,color:'#1a1a1a'}}>{formatPrice(total, currency)}</span>
               </div>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:'10px',fontSize:'0.85rem',color:'#aaa'}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:'8px',fontSize:'0.85rem',color:'#aaa'}}>
                 <span>Shipping</span>
                 <span style={{color:'#4caf50',fontWeight:700}}>FREE</span>
               </div>
+              {appliedVoucher && (
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:'8px',fontSize:'0.88rem'}}>
+                  <span style={{color:'#388e3c',fontWeight:600}}>🎟️ Diskon Voucher</span>
+                  <span style={{color:'#388e3c',fontWeight:700}}>− {formatPrice(discountDisplay, currency)}</span>
+                </div>
+              )}
               <div style={{height:'1px',background:'#f0f0f0',marginBottom:'10px'}} />
               <div style={{display:'flex',justifyContent:'space-between',fontSize:'1.05rem',fontWeight:800,color:'#1a1a1a'}}>
                 <span>Total</span>
-                <span style={{color:'#e53935'}}>{formatPrice(total, currency)}</span>
+                <span style={{color:'#e53935'}}>{formatPrice(appliedVoucher ? finalTotal : total, currency)}</span>
               </div>
               {currency !== 'GBP' && (
                 <p style={{margin:'8px 0 0',fontSize:'0.75rem',color:'#bbb',textAlign:'right'}}>
-                  ≈ {formatPrice(total, 'GBP')} original price
+                  ≈ {formatPrice(appliedVoucher ? finalTotal : total, 'GBP')} original price
                 </p>
               )}
             </div>
 
             <button
               id="checkout-btn"
-              onClick={onCheckout}
+              onClick={() => onCheckout(appliedVoucher)}
               disabled={isLoading}
               style={{
                 width:'100%',padding:'15px',background:isLoading?'#aaa':'#1a1a1a',color:'#fff',
@@ -268,7 +340,10 @@ function CartDrawer({ isOpen, onClose, cart, onUpdateQty, onRemove, onCheckout, 
 export default function App() {
   const { user, logout, getToken, wishlistIds, toggleWishlist } = useAuth();
   const navigate = useNavigate();
-  const [cart,         setCart]         = useState([]);
+  const [cart,         setCart]         = useState(() => {
+    try { const saved = localStorage.getItem('casmart_cart'); return saved ? JSON.parse(saved) : []; }
+    catch { return []; }
+  });
   const [cartOpen,     setCartOpen]     = useState(false);
   const [authOpen,     setAuthOpen]     = useState(false);
   const [isLoading,    setIsLoading]    = useState(false);
@@ -277,6 +352,12 @@ export default function App() {
   const [searchActive, setSearchActive] = useState(false);
   const [quickView,    setQuickView]    = useState(null);
   const [currency,     setCurrency]     = useState('IDR');
+
+  // Persist Cart
+  useEffect(() => {
+    localStorage.setItem('casmart_cart', JSON.stringify(cart));
+  }, [cart]);
+
   
   // Mobile Nav 
   useEffect(() => {
@@ -334,7 +415,7 @@ export default function App() {
   }, [user, toggleWishlist, showToast]);
 
   // Checkout 
-  const handleCheckout = async () => {
+  const handleCheckout = async (appliedVoucher) => {
     if (cart.length === 0) return;
     if (!user) {
       setCartOpen(false);
@@ -366,6 +447,8 @@ export default function App() {
           gross_amount:     grossAmount,
           item_details:     itemDetails,
           currency_display: currency,
+          voucher_code:     appliedVoucher?.code || null,
+          discount_amount:  appliedVoucher?.discount_amount || 0,
         }),
       });
 
@@ -373,7 +456,7 @@ export default function App() {
       if (data.token) {
         setCartOpen(false);
         window.snap.pay(data.token, {
-          onSuccess:  (r) => { showToast('Payment successful!'); setCart([]); console.log(r); },
+          onSuccess:  (r) => { showToast('Payment successful! 🎉'); setCart([]); console.log(r); },
           onPending:  (r) => { showToast('Payment pending — please complete it.'); console.log(r); },
           onError:    (r) => { showToast('Payment failed. Please try again.'); console.error(r); },
           onClose:    ()  => { showToast('Payment window closed.'); },
