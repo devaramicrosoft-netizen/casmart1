@@ -956,6 +956,61 @@ app.post('/api/vouchers/validate', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/vouchers/available — Public: list available (active, non-expired) vouchers for display
+app.get('/api/vouchers/available', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT id, code, type, value, min_order, max_uses, used_count, expires_at, description
+      FROM vouchers
+      WHERE is_active = 1
+        AND (expires_at IS NULL OR expires_at > NOW())
+        AND (max_uses = 0 OR used_count < max_uses)
+      ORDER BY created_at DESC
+    `);
+    return res.json({ vouchers: rows });
+  } catch (err) {
+    console.error('Available vouchers error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/orders/:orderId/review-status — Check which products in an order have been reviewed by user
+app.get('/api/orders/:orderId/review-status', verifyToken, async (req, res) => {
+  try {
+    const [reviews] = await db.query(
+      'SELECT product_id FROM reviews WHERE order_id = ? AND user_id = ?',
+      [req.params.orderId, req.user.id]
+    );
+    const reviewedProductIds = reviews.map(r => r.product_id);
+    return res.json({ reviewed: reviewedProductIds.length > 0, reviewedProductIds });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/newsletter/subscribe — Save newsletter email
+app.post('/api/newsletter/subscribe', async (req, res) => {
+  const { email } = req.body;
+  if (!email || !email.includes('@')) return res.status(400).json({ error: 'Valid email is required.' });
+  try {
+    // Create table if not exists
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+        id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        email      VARCHAR(255) NOT NULL UNIQUE,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await db.query(
+      'INSERT IGNORE INTO newsletter_subscribers (email) VALUES (?)',
+      [email.toLowerCase().trim()]
+    );
+    return res.json({ message: 'Subscribed successfully!' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══════════════════════════════════════════
 //   ADMIN ANALYTICS
 // ═══════════════════════════════════════════

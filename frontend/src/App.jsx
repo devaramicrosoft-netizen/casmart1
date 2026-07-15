@@ -55,6 +55,7 @@ function CurrencySwitcher({ currency, onChange }) {
 function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, isWished }) {
   const [reviews, setReviews] = React.useState([]);
   const [reviewsLoading, setReviewsLoading] = React.useState(true);
+  const [selectedSize, setSelectedSize] = React.useState('M');
 
   React.useEffect(() => {
     if (!product) return;
@@ -118,13 +119,16 @@ function QuickView({ product, onClose, onAddToCart, currency, onToggleWishlist, 
           <div style={{ marginBottom: '36px' }}>
             <p style={{ margin: '0 0 12px', fontSize: '0.95rem', fontWeight: 700, color: '#333' }}>Select Size</p>
             <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
-              {['XS','S','M','L','XL'].map((s, i) => (
-                <button key={s} style={{
-                  width:'48px',height:'48px',border:'1.5px solid', borderColor: i === 2 ? '#1a1a1a' : '#e0e0e0', borderRadius:'12px',background: i === 2 ? '#1a1a1a' : '#fff',cursor:'pointer',fontWeight:600,fontSize:'0.9rem',color: i === 2 ? '#fff' : '#333',transition:'all 0.2s',fontFamily:'Jost,sans-serif'
-                }}
-                  onMouseEnter={e=>{if(i !== 2) {e.target.style.borderColor='#1a1a1a';e.target.style.color='#1a1a1a';}}}
-                  onMouseLeave={e=>{if(i !== 2) {e.target.style.borderColor='#e0e0e0';e.target.style.color='#333';}}}
-                >{s}</button>
+              {['XS','S','M','L','XL'].map((s) => (
+                <button key={s} onClick={() => setSelectedSize(s)} style={{
+                  width:'48px',height:'48px',border:'1.5px solid',
+                  borderColor: selectedSize === s ? '#1a1a1a' : '#e0e0e0',
+                  borderRadius:'12px',
+                  background: selectedSize === s ? '#1a1a1a' : '#fff',
+                  cursor:'pointer',fontWeight:600,fontSize:'0.9rem',
+                  color: selectedSize === s ? '#fff' : '#333',
+                  transition:'all 0.2s',fontFamily:'Jost,sans-serif'
+                }}>{s}</button>
               ))}
             </div>
           </div>
@@ -693,7 +697,7 @@ export default function App() {
               showToast={showToast}
             />
           } />
-          <Route path="/profile" element={<ProfilePage currency={currency} showToast={showToast} />} />
+          <Route path="/profile" element={<ProfilePage currency={currency} showToast={showToast} addToCart={addToCart} />} />
           <Route path="/admin" element={<AdminDashboard currency={currency} showToast={showToast} />} />
         </Routes>
       </main>

@@ -93,6 +93,7 @@ export default function Shop({
   const [products, setProducts] = useState([]);
   const [activeFilter, setActiveFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(8);
 
   useEffect(() => {
     axios.get('http://localhost:5000/api/products')
@@ -103,6 +104,9 @@ export default function Shop({
       })
       .finally(() => setLoading(false));
   }, [showToast]);
+
+  // Reset visible count when filter or search changes
+  useEffect(() => { setVisibleCount(8); }, [activeFilter, searchQuery]);
 
   const filteredProducts = products.filter(p => {
     let cats = [];
@@ -117,8 +121,13 @@ export default function Shop({
     return matchFilter && matchSearch;
   });
 
+  const visibleProducts = filteredProducts.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredProducts.length;
+
   return (
-    <article>
+    <>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <article>
       {/* HERO */}
       <section className="hero" id="home" style={{backgroundImage:"url('/assets/images/hero-banner.jpg')"}}>
         <div className="container">
@@ -210,7 +219,10 @@ export default function Shop({
           </ul>
 
           {loading ? (
-             <div style={{textAlign:'center', padding:'60px', fontFamily:'Jost'}}>Loading products...</div>
+            <div style={{textAlign:'center', padding:'60px', fontFamily:'Jost', display:'flex', flexDirection:'column', alignItems:'center', gap:'16px'}}>
+              <div style={{width:'48px',height:'48px',border:'4px solid #f0f0f0',borderTopColor:'#1a1a1a',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
+              <p style={{color:'#999',fontSize:'0.9rem',margin:0}}>Loading products...</p>
+            </div>
           ) : filteredProducts.length === 0 ? (
             <div className="product-empty" style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px'}}>
               <Search size={64} color="#ddd" strokeWidth={1.5} />
@@ -218,7 +230,7 @@ export default function Shop({
             </div>
           ) : (
             <ul className="product-list">
-              {filteredProducts.map(p=>(
+              {visibleProducts.map(p=>(
                 <ProductCard
                   key={p.id}
                   product={p}
@@ -231,7 +243,20 @@ export default function Shop({
               ))}
             </ul>
           )}
-          <button className="btn btn-outline">View All Products</button>
+          {!loading && hasMore && (
+            <button
+              className="btn btn-outline"
+              onClick={() => setVisibleCount(c => c + 8)}
+              style={{display:'flex',alignItems:'center',gap:'8px',margin:'0 auto'}}
+            >
+              Load More ({filteredProducts.length - visibleCount} remaining)
+            </button>
+          )}
+          {!loading && !hasMore && filteredProducts.length > 0 && (
+            <p style={{textAlign:'center',fontFamily:'Jost,sans-serif',color:'#bbb',fontSize:'0.88rem',marginTop:'8px'}}>
+              All {filteredProducts.length} products shown
+            </p>
+          )}
         </div>
       </section>
 
@@ -265,7 +290,27 @@ export default function Shop({
         <div className="container">
           <div className="newsletter-card" style={{backgroundImage:"url('/assets/images/newsletter-bg.png')"}}>
             <h2 className="card-title">Subscribe Newsletter</h2>
-            <form className="card-form" onSubmit={e=>{e.preventDefault();showToast('Subscribed successfully!');}}>
+            <form className="card-form" onSubmit={async e=>{
+              e.preventDefault();
+              const emailInput = e.target.email;
+              const email = emailInput.value.trim();
+              if (!email) return;
+              try {
+                const res = await fetch('http://localhost:5000/api/newsletter/subscribe', {
+                  method: 'POST',
+                  headers: {'Content-Type':'application/json'},
+                  body: JSON.stringify({ email })
+                });
+                if (res.ok) {
+                  showToast('🎉 Subscribed! Thank you for joining us.');
+                  emailInput.value = '';
+                } else {
+                  showToast('Subscription failed. Please try again.');
+                }
+              } catch {
+                showToast('Could not connect. Please check your connection.');
+              }
+            }}>
               <div className="input-wrapper">
                 <ion-icon name="mail-outline"></ion-icon>
                 <input type="email" name="email" placeholder="Enter your email" required className="input-field" />
@@ -279,5 +324,6 @@ export default function Shop({
         </div>
       </section>
     </article>
+    </>
   );
 }

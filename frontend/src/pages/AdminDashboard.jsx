@@ -701,7 +701,7 @@ function VoucherPanel({ getToken, showToast }) {
     type: 'doughnut',
     data: {
       labels: ['Persentase (%)', 'Fixed (IDR)'],
-      datasets: [{ data: [pct, fix], backgroundColor: ['#667eea', '#f093fb'], borderWidth: 0, hoverOffset: 8 }]
+      datasets: [{ data: [pct, fix], backgroundColor: ['#00ffe5ff', '#33ff00ff'], borderWidth: 0, hoverOffset: 8 }]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { family: 'Jost', size: 12 }, padding: 14 } } } }
   }, [pct, fix]);
@@ -715,7 +715,7 @@ function VoucherPanel({ getToken, showToast }) {
       datasets: [{
         label: 'Dipakai',
         data: top8.map(v => v.used_count),
-        backgroundColor: top8.map((_, i) => `hsl(${220 + i * 20}, 70%, 60%)`),
+        backgroundColor: top8.map((_, i) => i % 2 === 0 ? '#00b7ffff' : '#e53935'),
         borderRadius: 6,
         borderSkipped: false
       }]
@@ -785,7 +785,7 @@ function VoucherPanel({ getToken, showToast }) {
         {/* Pie */}
         <div style={{ background:'#fff', borderRadius:'14px', padding:'20px', boxShadow:'0 2px 12px rgba(0,0,0,0.05)', border:'1px solid #f0f0f0' }}>
           <h3 style={{ margin:'0 0 16px', fontSize:'0.9rem', fontWeight:800, color:'#1a1a1a', display:'flex', alignItems:'center', gap:'8px' }}>
-            <Percent size={15} color="#667eea" /> Tipe Voucher
+            <Percent size={15} color="#1a1a1a" /> Tipe Voucher
           </h3>
           <div style={{ height:'200px', position:'relative' }}>
             {vouchers.length === 0 ? (
@@ -796,7 +796,7 @@ function VoucherPanel({ getToken, showToast }) {
         {/* Bar */}
         <div style={{ background:'#fff', borderRadius:'14px', padding:'20px', boxShadow:'0 2px 12px rgba(0,0,0,0.05)', border:'1px solid #f0f0f0' }}>
           <h3 style={{ margin:'0 0 16px', fontSize:'0.9rem', fontWeight:800, color:'#1a1a1a', display:'flex', alignItems:'center', gap:'8px' }}>
-            <BarChart2 size={15} color="#667eea" /> Penggunaan per Voucher
+            <BarChart2 size={15} color="#1a1a1a" /> Penggunaan per Voucher
           </h3>
           <div style={{ height:'200px', position:'relative' }}>
             {vouchers.length === 0 ? (
@@ -821,7 +821,7 @@ function VoucherPanel({ getToken, showToast }) {
                 style={{ border:'none', background:'transparent', outline:'none', fontFamily:'Jost,sans-serif', fontSize:'0.85rem', color:'#555', width:'100%' }} />
             </div>
             <button onClick={() => setFormData(EMPTY_VOUCHER)}
-              style={{ padding:'9px 16px', background:'linear-gradient(135deg,#667eea,#764ba2)', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'Jost,sans-serif', fontWeight:700, fontSize:'0.85rem', display:'flex', alignItems:'center', gap:'6px', boxShadow:'0 4px 12px rgba(102,126,234,0.4)' }}>
+              style={{ padding:'9px 16px', background:'#1a1a1a', color:'#fff', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'Jost,sans-serif', fontWeight:700, fontSize:'0.85rem', display:'flex', alignItems:'center', gap:'6px', boxShadow:'0 4px 12px rgba(26,26,26,0.3)' }}>
               <Plus size={15} /> Buat Voucher
             </button>
           </div>

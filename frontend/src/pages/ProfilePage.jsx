@@ -216,7 +216,7 @@ function OrdersTab({ user, getToken, currency, showToast }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  const [reviewModal, setReviewModal] = useState(null); // { orderId, productId, productName }
+  const [reviewModal, setReviewModal] = useState(null);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewHover, setReviewHover] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
@@ -225,8 +225,23 @@ function OrdersTab({ user, getToken, currency, showToast }) {
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    axios.get(`${API}/api/orders`, { headers: { Authorization: `Bearer ${getToken()}` } })
-      .then(res => setOrders(res.data.orders))
+    const headers = { Authorization: `Bearer ${getToken()}` };
+    axios.get(`${API}/api/orders`, { headers })
+      .then(async res => {
+        const ordersData = res.data.orders;
+        setOrders(ordersData);
+        // Check review status for all successful orders from backend
+        const reviewCheckPromises = ordersData
+          .filter(o => ['success','completed','settlement'].includes(o.status) && o.first_product_id)
+          .map(o =>
+            axios.get(`${API}/api/orders/${o.id}/review-status`, { headers })
+              .then(r => r.data.reviewed ? o.id : null)
+              .catch(() => null)
+          );
+        const results = await Promise.all(reviewCheckPromises);
+        const alreadyReviewed = new Set(results.filter(Boolean));
+        setReviewedOrders(alreadyReviewed);
+      })
       .catch(() => showToast('Failed to load orders'))
       .finally(() => setLoading(false));
   }, [user, getToken, showToast]);
@@ -458,6 +473,23 @@ function SecurityTab({ user, logout, showToast, setActiveTab }) {
   const [show2FA, setShow2FA] = useState(false);
   const [showLoginAct, setShowLoginAct] = useState(false);
 
+  // Detect real device/browser info from user agent
+  const getDeviceInfo = () => {
+    const ua = navigator.userAgent;
+    let browser = 'Unknown Browser';
+    let os = 'Unknown OS';
+    if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+    else if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('Edg')) browser = 'Edge';
+    if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Mac')) os = 'MacOS';
+    else if (ua.includes('Linux')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+    return `${os} · ${browser}`;
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div style={card}>
@@ -466,9 +498,9 @@ function SecurityTab({ user, logout, showToast, setActiveTab }) {
         
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {[
-            { id: 'pw', icon: <Lock size={20} />, title: 'Password', desc: 'Update your password', action: 'Update' },
-            { id: '2fa', icon: <Shield size={20} />, title: 'Two-Factor Authentication', desc: 'Add an extra layer of security', action: 'Enable' },
-            { id: 'activity', icon: <MapPin size={20} />, title: 'Login Activity', desc: 'Review active sessions', action: 'View' },
+            { id: 'pw', icon: <Lock size={20} />, title: 'Password', desc: 'Update your password', action: 'Update', color: '#1a1a1a' },
+            { id: '2fa', icon: <Shield size={20} />, title: 'Two-Factor Authentication', desc: 'Add an extra layer of security (coming soon)', action: 'Learn More', color: '#888' },
+            { id: 'activity', icon: <MapPin size={20} />, title: 'Login Activity', desc: 'Review active sessions', action: 'View', color: '#1a1a1a' },
           ].map((item, i) => (
             <div key={i} style={{ 
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
@@ -489,7 +521,7 @@ function SecurityTab({ user, logout, showToast, setActiveTab }) {
                   if (item.id === '2fa') setShow2FA(true);
                   if (item.id === 'activity') setShowLoginAct(true);
                 }}
-                style={{ background: 'transparent', border: '1px solid #ddd', padding: '6px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#333', cursor: 'pointer', fontFamily: 'Jost', transition: 'all 0.2s', ':hover': {background: '#f5f5f5'} }}>
+                style={{ background: 'transparent', border: `1px solid ${item.color === '#888' ? '#ddd' : '#ddd'}`, padding: '6px 16px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 600, color: item.color, cursor: 'pointer', fontFamily: 'Jost', transition: 'all 0.2s' }}>
                 {item.action}
               </button>
             </div>
@@ -520,49 +552,65 @@ function SecurityTab({ user, logout, showToast, setActiveTab }) {
         )}
       </div>
 
-      {/* Modals for Security features */}
+      {/* 2FA Modal — Coming Soon UI */}
       {show2FA && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div style={{ background: '#fff', padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '400px', position: 'relative' }}>
-            <button onClick={() => setShow2FA(false)} style={{ position: 'absolute', right: '16px', top: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}><X size={20} /></button>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ width: '64px', height: '64px', background: '#E8F5E9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#2E7D32' }}>
-                <Shield size={32} />
-              </div>
-              <h3 style={{ margin: '0 0 8px', fontFamily: 'Jost', fontSize: '1.2rem', color: '#222' }}>Two-Factor Authentication</h3>
-              <p style={{ margin: 0, fontFamily: 'Jost', color: '#666', fontSize: '0.9rem' }}>Scan the QR code below with your Authenticator app (like Google Authenticator or Authy).</p>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setShow2FA(false)}>
+          <div style={{ background: '#fff', padding: '40px 32px', borderRadius: '20px', width: '100%', maxWidth: '400px', position: 'relative', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShow2FA(false)} style={{ position: 'absolute', right: '16px', top: '16px', background: '#f5f5f5', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
+            <div style={{ width: '80px', height: '80px', background: 'linear-gradient(135deg, #667eea, #764ba2)', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+              <Shield size={38} color="#fff" />
             </div>
-            <div style={{ background: '#f5f5f5', border: '1px dashed #ccc', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', marginBottom: '24px' }}>
-              <span style={{ fontFamily: 'Jost', color: '#999', fontSize: '0.85rem' }}>[QR Code Placeholder]</span>
+            <h3 style={{ margin: '0 0 10px', fontFamily: 'Jost', fontSize: '1.3rem', color: '#222', fontWeight: 800 }}>Two-Factor Authentication</h3>
+            <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,#667eea18,#764ba218)', border: '1.5px solid #764ba240', borderRadius: '20px', padding: '6px 18px', marginBottom: '16px' }}>
+              <span style={{ fontFamily: 'Jost', fontWeight: 700, fontSize: '0.8rem', color: '#764ba2' }}>🚀 Coming Soon</span>
             </div>
-            <button onClick={() => { showToast('2FA Enabled successfully! (Simulated)'); setShow2FA(false); }} style={{ width: '100%', background: '#1a1a1a', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Jost' }}>
-              Verify & Enable
+            <p style={{ margin: '0 0 20px', fontFamily: 'Jost', color: '#666', fontSize: '0.92rem', lineHeight: 1.7 }}>
+              We're working hard to bring you TOTP-based two-factor authentication for enhanced account security. This feature will support apps like <strong>Google Authenticator</strong> and <strong>Authy</strong>.
+            </p>
+            <div style={{ background: '#f9f9f9', borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'left' }}>
+              <p style={{ margin: '0 0 8px', fontFamily: 'Jost', fontWeight: 700, color: '#333', fontSize: '0.88rem' }}>What's coming:</p>
+              {['TOTP QR Code setup', 'Backup recovery codes', 'SMS fallback option'].map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                  <CheckCircle2 size={14} color="#764ba2" />
+                  <span style={{ fontFamily: 'Jost', color: '#555', fontSize: '0.85rem' }}>{f}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShow2FA(false)} style={{ width: '100%', background: 'linear-gradient(135deg, #667eea, #764ba2)', color: '#fff', border: 'none', padding: '13px', borderRadius: '10px', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'Jost' }}>
+              Got it!
             </button>
           </div>
         </div>
       )}
 
+      {/* Login Activity Modal — Real device info */}
       {showLoginAct && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div style={{ background: '#fff', padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '500px', position: 'relative' }}>
-            <button onClick={() => setShowLoginAct(false)} style={{ position: 'absolute', right: '16px', top: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}><X size={20} /></button>
-            <h3 style={{ margin: '0 0 24px', fontFamily: 'Jost', fontSize: '1.2rem', color: '#222' }}>Login Activity</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {[
-                { device: 'Windows PC · Chrome', loc: 'Jakarta, Indonesia', time: 'Active now', icon: <MapPin size={18} /> },
-                { device: 'iPhone 13 · Safari', loc: 'Bandung, Indonesia', time: '2 hours ago', icon: <MapPin size={18} /> }
-              ].map((act, i) => (
-                <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'center', padding: '16px', border: '1px solid #eee', borderRadius: '8px' }}>
-                  <div style={{ width: '40px', height: '40px', background: '#f5f5f5', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>{act.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ margin: '0 0 4px', fontSize: '0.95rem', fontFamily: 'Jost', color: '#222' }}>{act.device}</h4>
-                    <p style={{ margin: 0, fontSize: '0.85rem', fontFamily: 'Jost', color: '#888' }}>{act.loc}</p>
-                  </div>
-                  <span style={{ fontSize: '0.8rem', fontFamily: 'Jost', color: i === 0 ? '#2E7D32' : '#888', fontWeight: i === 0 ? 600 : 400 }}>{act.time}</span>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={() => setShowLoginAct(false)}>
+          <div style={{ background: '#fff', padding: '32px', borderRadius: '16px', width: '100%', maxWidth: '520px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowLoginAct(false)} style={{ position: 'absolute', right: '16px', top: '16px', background: '#f5f5f5', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
+            <h3 style={{ margin: '0 0 6px', fontFamily: 'Jost', fontSize: '1.2rem', color: '#222', fontWeight: 800 }}>Login Activity</h3>
+            <p style={{ margin: '0 0 24px', fontFamily: 'Jost', color: '#888', fontSize: '0.88rem' }}>Devices currently logged into your Casmart account.</p>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', padding: '20px', border: '2px solid #e8f5e9', borderRadius: '12px', background: '#f9fef9', marginBottom: '16px' }}>
+              <div style={{ width: '48px', height: '48px', background: '#e8f5e9', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, position: 'relative' }}>
+                <MapPin size={22} color="#2e7d32" />
+                <div style={{ position: 'absolute', top: -2, right: -2, width: 10, height: 10, background: '#4caf50', borderRadius: '50%', border: '2px solid #fff' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontFamily: 'Jost', color: '#1a1a1a', fontWeight: 700 }}>{getDeviceInfo()}</h4>
+                  <span style={{ fontSize: '0.75rem', fontFamily: 'Jost', color: '#2E7D32', fontWeight: 700, background: '#e8f5e9', padding: '3px 10px', borderRadius: '20px' }}>Active now</span>
                 </div>
-              ))}
+                <p style={{ margin: '0 0 4px', fontSize: '0.83rem', fontFamily: 'Jost', color: '#666' }}>Logged in as <strong>{user?.email}</strong></p>
+                <p style={{ margin: 0, fontSize: '0.78rem', fontFamily: 'Jost', color: '#aaa' }}>Session started this browser tab · JWT expires in 7 days</p>
+              </div>
             </div>
-            <button onClick={() => setShowLoginAct(false)} style={{ width: '100%', background: '#fff', color: '#333', border: '1px solid #ddd', padding: '12px', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Jost', marginTop: '24px' }}>
+            <div style={{ background: '#fff8e1', borderRadius: '10px', padding: '14px 16px', display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '20px' }}>
+              <AlertCircle size={18} color="#f59e0b" style={{ flexShrink: 0, marginTop: '1px' }} />
+              <p style={{ margin: 0, fontFamily: 'Jost', fontSize: '0.83rem', color: '#92400e', lineHeight: 1.6 }}>
+                Full session management (view all devices, revoke sessions) will be available in a future update. For now, you can log out using the button below.
+              </p>
+            </div>
+            <button onClick={() => setShowLoginAct(false)} style={{ width: '100%', background: '#1a1a1a', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Jost' }}>
               Close
             </button>
           </div>
@@ -573,7 +621,7 @@ function SecurityTab({ user, logout, showToast, setActiveTab }) {
 }
 
 // Wishlist Tab
-function WishlistTab({ getToken, currency, showToast, toggleWishlist }) {
+function WishlistTab({ getToken, currency, showToast, toggleWishlist, addToCart }) {
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -661,6 +709,7 @@ function WishlistTab({ getToken, currency, showToast, toggleWishlist }) {
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
+                      onClick={() => { addToCart(product); showToast(`"${product.name}" added to cart!`); }}
                       style={{ flex: 1, background: '#1a1a1a', color: '#fff', border: 'none', padding: '9px', borderRadius: '8px', fontFamily: 'Jost', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'background 0.2s' }}
                       onMouseEnter={e => e.currentTarget.style.background = '#333'}
                       onMouseLeave={e => e.currentTarget.style.background = '#1a1a1a'}
@@ -691,6 +740,152 @@ const card = { background: '#fff', borderRadius: '12px', padding: '32px', boxSha
 const sectionTitle = { margin: '0 0 20px', fontSize: '1.15rem', fontWeight: 700, color: '#222', fontFamily: 'Jost, sans-serif' };
 const btnStyle = { background: '#1a1a1a', color: '#fff', border: 'none', padding: '12px 28px', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Jost, sans-serif', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 
+// Vouchers Tab
+function VouchersTab({ getToken, showToast }) {
+  const [vouchers, setVouchers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(null);
+
+  useEffect(() => {
+    fetch('http://localhost:5000/api/vouchers/available', {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    })
+      .then(r => r.json())
+      .then(d => setVouchers(d.vouchers || []))
+      .catch(() => showToast('Failed to load vouchers'))
+      .finally(() => setLoading(false));
+  }, [getToken, showToast]);
+
+  const handleCopy = (code) => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(code);
+      showToast(`Kode "${code}" disalin!`);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const getDaysLeft = (expiresAt) => {
+    if (!expiresAt) return null;
+    const diff = Math.ceil((new Date(expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
+    return diff;
+  };
+
+  const getDiscountLabel = (v) => {
+    if (v.type === 'percent') return `${v.value}% OFF`;
+    return `Rp${Number(v.value).toLocaleString('id-ID')} OFF`;
+  };
+
+  const getUsageLabel = (v) => {
+    if (v.max_uses === 0) return 'Unlimited uses';
+    const left = v.max_uses - v.used_count;
+    return `${left} use${left !== 1 ? 's' : ''} left`;
+  };
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <h3 style={sectionTitle}>My Vouchers</h3>
+        <button
+          onClick={() => { setLoading(true); fetch('http://localhost:5000/api/vouchers/available', { headers: { Authorization: `Bearer ${getToken()}` } }).then(r => r.json()).then(d => setVouchers(d.vouchers || [])).finally(() => setLoading(false)); }}
+          style={{ background: 'none', border: '1px solid #eee', borderRadius: '8px', padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: '#888', fontFamily: 'Jost' }}
+        >
+          <RefreshCw size={14} /> Refresh
+        </button>
+      </div>
+      <p style={{ margin: '-14px 0 24px', fontSize: '0.9rem', color: '#888', fontFamily: 'Jost' }}>
+        Klik kode voucher untuk menyalinnya. Gunakan saat checkout di keranjang belanja!
+      </p>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <RefreshCw size={32} color="#ddd" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <p style={{ fontFamily: 'Jost', color: '#bbb' }}>Loading vouchers...</p>
+        </div>
+      ) : vouchers.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <Ticket size={64} color="#ddd" style={{ margin: '0 auto 16px', display: 'block' }} />
+          <h3 style={{ fontFamily: 'Jost', fontSize: '1.1rem', color: '#555', margin: '0 0 8px' }}>Tidak ada voucher tersedia</h3>
+          <p style={{ fontFamily: 'Jost', color: '#aaa', margin: 0 }}>Pantau terus untuk penawaran spesial dari Casmart!</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+          {vouchers.map(v => {
+            const daysLeft = getDaysLeft(v.expires_at);
+            const isExpiringSoon = daysLeft !== null && daysLeft <= 3;
+            const isCopied = copied === v.code;
+            return (
+              <div key={v.id} style={{
+                border: '2px dashed #e0e0e0', borderRadius: '16px', overflow: 'hidden',
+                background: '#fff', transition: 'all 0.2s', position: 'relative',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#e53935'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(229,57,53,0.12)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; }}
+              >
+                {/* Colored top band */}
+                <div style={{ height: '6px', background: 'linear-gradient(90deg, #e53935, #ff7043)' }} />
+
+                {/* Expiring soon badge */}
+                {isExpiringSoon && (
+                  <div style={{ position: 'absolute', top: '16px', right: '16px', background: '#fff3e0', color: '#e65100', fontSize: '0.7rem', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', fontFamily: 'Jost', border: '1px solid #ffe0b2' }}>
+                    ⏰ {daysLeft === 0 ? 'Expires Today!' : `${daysLeft}d left`}
+                  </div>
+                )}
+
+                <div style={{ padding: '20px 24px' }}>
+                  {/* Discount headline */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <div style={{ width: '40px', height: '40px', background: '#ffebee', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ticket size={20} color="#e53935" />
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontFamily: 'Jost', fontWeight: 800, fontSize: '1.3rem', color: '#e53935', lineHeight: 1 }}>{getDiscountLabel(v)}</p>
+                      <p style={{ margin: '2px 0 0', fontFamily: 'Jost', fontSize: '0.78rem', color: '#888' }}>
+                        {v.min_order > 0 ? `Min. order Rp${Number(v.min_order).toLocaleString('id-ID')}` : 'No minimum order'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {v.description && (
+                    <p style={{ margin: '0 0 14px', fontFamily: 'Jost', fontSize: '0.88rem', color: '#555', lineHeight: 1.5 }}>{v.description}</p>
+                  )}
+
+                  {/* Code copy button */}
+                  <button
+                    onClick={() => handleCopy(v.code)}
+                    style={{
+                      width: '100%', padding: '12px', border: `2px dashed ${isCopied ? '#4caf50' : '#e53935'}`,
+                      borderRadius: '10px', background: isCopied ? '#e8f5e9' : '#fff5f5',
+                      color: isCopied ? '#2e7d32' : '#e53935', fontFamily: 'Jost', fontWeight: 800,
+                      fontSize: '1.05rem', letterSpacing: '2px', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                      transition: 'all 0.2s', marginBottom: '12px'
+                    }}
+                  >
+                    {isCopied ? <><CheckCircle2 size={16} /> Copied!</> : <><Copy size={14} /> {v.code}</>}
+                  </button>
+
+                  {/* Meta info */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontFamily: 'Jost', fontSize: '0.78rem', color: '#aaa' }}>
+                      🔢 {getUsageLabel(v)}
+                    </span>
+                    <span style={{ fontFamily: 'Jost', fontSize: '0.78rem', color: v.expires_at ? (isExpiringSoon ? '#e65100' : '#888') : '#4caf50' }}>
+                      {v.expires_at
+                        ? `Exp: ${new Date(v.expires_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                        : '✨ No expiry'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const SIDEBAR_ITEMS = [
   { key: 'account',  label: 'My Profile',    icon: <User size={20} /> },
@@ -700,7 +895,7 @@ const SIDEBAR_ITEMS = [
   { key: 'security', label: 'Security',      icon: <Shield size={20} /> },
 ];
 
-export default function ProfilePage({ currency, showToast }) {
+export default function ProfilePage({ currency, showToast, addToCart }) {
   const { user, getToken, logout, updateUser, toggleWishlist } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -782,16 +977,8 @@ export default function ProfilePage({ currency, showToast }) {
             {activeTab === 'account'  && <AccountTab user={user} getToken={getToken} updateUser={updateUser} showToast={showToast} avatarColor={avatarColor} setAvatarColor={setAvatarColor} />}
             {activeTab === 'orders'   && <OrdersTab user={user} getToken={getToken} currency={currency} showToast={showToast} />}
             {activeTab === 'security' && <SecurityTab user={user} logout={logout} showToast={showToast} setActiveTab={setActiveTab} />}
-            {activeTab === 'wishlist' && <WishlistTab getToken={getToken} currency={currency} showToast={showToast} toggleWishlist={toggleWishlist} />}
-            {activeTab === 'vouchers' && (
-              <div style={card}>
-                <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-                  <Ticket size={64} color="#ddd" style={{ margin: '0 auto 16px' }} />
-                  <h3 style={{ fontFamily: 'Jost', fontSize: '1.2rem', color: '#333' }}>Feature Coming Soon</h3>
-                  <p style={{ fontFamily: 'Jost', color: '#888' }}>We are working hard to bring this feature to you.</p>
-                </div>
-              </div>
-            )}
+            {activeTab === 'wishlist' && <WishlistTab getToken={getToken} currency={currency} showToast={showToast} toggleWishlist={toggleWishlist} addToCart={addToCart} />}
+            {activeTab === 'vouchers' && <VouchersTab getToken={getToken} showToast={showToast} />}
           </div>
 
         </div>
