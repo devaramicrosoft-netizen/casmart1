@@ -138,6 +138,56 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// POST /api/auth/google — Google Login/Signup
+const { OAuth2Client } = require('google-auth-library');
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || 'dummy');
+
+app.post('/api/auth/google', async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) return res.status(400).json({ error: 'Google credential is required' });
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+    const payload = ticket.getPayload();
+    const { email, name, picture } = payload;
+    const lowerEmail = email.toLowerCase().trim();
+
+    let [rows] = await db.query('SELECT id, name, email, role, avatar FROM users WHERE email = ?', [lowerEmail]);
+    let user;
+
+    if (rows.length === 0) {
+      // Create new user with random password
+      const randomPassword = Math.random().toString(36).slice(-10) + 'Aa1!';
+      const hash = await bcrypt.hash(randomPassword, 10);
+      const [insert] = await db.query(
+        'INSERT INTO users (name, email, password_hash, role, avatar) VALUES (?, ?, ?, ?, ?)',
+        [name, lowerEmail, hash, 'user', picture || null]
+      );
+      user = { id: insert.insertId, name, email: lowerEmail, role: 'user', avatar: picture };
+    } else {
+      user = rows[0];
+      if (!user.avatar && picture) {
+        await db.query('UPDATE users SET avatar = ? WHERE id = ?', [picture, user.id]);
+        user.avatar = picture;
+      }
+    }
+
+    const token = jwt.sign(
+      { id: user.id, name: user.name, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.status(200).json({ message: 'Google login successful!', token, user });
+  } catch (err) {
+    console.error('Google auth error:', err);
+    return res.status(401).json({ error: 'Invalid Google token' });
+  }
+});
+
 // GET /api/auth/me 
 app.get('/api/auth/me', verifyToken, async (req, res) => {
   try {
